@@ -1,0 +1,15 @@
+*/.idea/*
+*.so
+.DS_Store
+*.swp
+*/build/*
+*/__pycache__/*
+__pycache__/
+build/
+*.pyc
+test/*
+*.pth
+models/*
+models/logs/*
+*.mat
+
