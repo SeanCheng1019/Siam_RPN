@@ -1,12 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="88dae337-35b9-4059-9fa4-c794695e3bb4" name="Default" comment="polish dataset dealing">
-      <change afterPath="$PROJECT_DIR$/.idea/Siam_RPN.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-    </list>
+    <list default="true" id="88dae337-35b9-4059-9fa4-c794695e3bb4" name="Default" comment="polish dataset dealing" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -82,6 +77,7 @@
       <option name="presentableId" value="Default" />
       <updated>1571798883449</updated>
       <workItem from="1572256894469" duration="4227000" />
+      <workItem from="1572325160091" duration="287000" />
     </task>
     <servers />
   </component>
@@ -93,7 +89,9 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="COLUMN_ORDER" />
+            </State>
           </value>
         </entry>
       </map>
