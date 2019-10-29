@@ -64,7 +64,7 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
 
         tmp_img = np.zeros((im_h + top_pad + bottom_pad, im_w + left_pad + right_pad, im_c), np.uint8)
         # 把原图的值赋上
-        tmp_img[top_pad:top_pad + im_h, left_pad:left_pad + im_w, im_c] = img
+        tmp_img[top_pad:top_pad + im_h, left_pad:left_pad + im_w, :] = img
 
         tmp_img = np.zeros((im_h + top_pad + bottom_pad, im_w + left_pad + right_pad,  im_c), np.uint8)
         # 把原图的值赋上
