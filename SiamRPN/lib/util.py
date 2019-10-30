@@ -104,3 +104,6 @@ def compute_iou(anchors, gt):
 def ajust_learning_rate(optimizer, decay=0.1):
     for param_group in optimizer.param_groups:
         param_group['lr'] = decay * param_group['lr']
+
+def generate_anchors():
+    pass

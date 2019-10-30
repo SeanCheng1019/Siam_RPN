@@ -1,6 +1,7 @@
 from torch.utils.data.dataset import Dataset
 import numpy as np
 from net.config import Config
+from lib.util import generate_anchors
 
 
 class GetDataSet(Dataset):
@@ -25,6 +26,7 @@ class GetDataSet(Dataset):
             for object_id in track_sequence_info.keys():
                 if len(track_sequence_info[object_id]) < 2:
                     del track_sequence_info[object_id]
+        self.anchors = generate_anchors()
 
     def __getitem__(self, index):  # 何时调用的，何时传入的index参数
         all_idx = np.arange(self.num)
@@ -34,3 +36,4 @@ class GetDataSet(Dataset):
 
     def __len__(self) -> int:
         return super().__len__()
+
