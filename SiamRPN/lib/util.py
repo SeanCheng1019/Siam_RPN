@@ -14,7 +14,8 @@ def xyxy2cxcywh(bbox):
 
 
 def cxcywh2xyxy(bbox):
-    pass
+    cx, cy, w, h = bbox
+    return cx - 1 / 2 * w, cy - 1 / 2 * h, cx + 1 / 2 * w, cy + 1 / 2 * h
 
 
 def get_instance_img(img, bbox, size_z, size_x, context_margin_amount, img_mean=None):
@@ -66,7 +67,7 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
         # 把原图的值赋上
         tmp_img[top_pad:top_pad + im_h, left_pad:left_pad + im_w, :] = img
 
-        tmp_img = np.zeros((im_h + top_pad + bottom_pad, im_w + left_pad + right_pad,  im_c), np.uint8)
+        tmp_img = np.zeros((im_h + top_pad + bottom_pad, im_w + left_pad + right_pad, im_c), np.uint8)
         # 把原图的值赋上
         tmp_img[top_pad:top_pad + im_h, left_pad:left_pad + im_w, :] = img
 
@@ -97,4 +98,12 @@ def round_up(value):
 
 
 def compute_iou(anchors, gt):
+    pass
+
+
+def ajust_learning_rate(optimizer, decay=0.1):
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = decay * param_group['lr']
+
+def generate_anchors():
     pass
