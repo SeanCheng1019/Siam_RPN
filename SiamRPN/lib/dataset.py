@@ -2,6 +2,8 @@ from torch.utils.data.dataset import Dataset
 import numpy as np
 from net.config import Config
 from lib.util import generate_anchors
+from glob import glob
+import os
 
 
 class GetDataSet(Dataset):
@@ -28,15 +30,26 @@ class GetDataSet(Dataset):
                 if len(track_sequence_info[object_id]) < 2:
                     del track_sequence_info[object_id]
         self.training = training
-
-        self.anchors = generate_anchors()
+        self.anchors = generate_anchors(Config.total_stride, Config.anchor_base_size, Config.anchor_scales,
+                                        Config.anchor_ratio, Config.score_map_size)
 
     def __getitem__(self, index):  # 何时调用的，何时传入的index参数
         all_idx = np.arange(self.num)
         np.random.shuffle(all_idx)
         for idx in all_idx:
             index = index % len(self.sequence_names)
+            sequence = self.sequence_names[index]
+            trajs = self.meta_data[sequence]
+            if len(trajs.keys()) == 0:
+                continue
+            trkid = np.random.choice(list(trajs.keys()))
+            trk_frames = trajs[trkid]
+            assert len(trk_frames) > 1, "sequence_name: {}".format(sequence)
+            # 选择图片
+            exemplar_index = np.random.choice(list(range(len(trk_frames))))
+            exemplar_name = glob(os.path.join(self.data_dir, sequence, trk_frames[exemplar_index] +
+                                              ".{:02d}.patch*.jpg".format(trkid)))[0]
+            
 
     def __len__(self) -> int:
         return super().__len__()
-

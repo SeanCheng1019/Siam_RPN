@@ -106,13 +106,31 @@ def ajust_learning_rate(optimizer, decay=0.1):
         param_group['lr'] = decay * param_group['lr']
 
 
-def generate_anchors(total_stride, base_size, scales, ratios):
+def generate_anchors(total_stride, base_size, scales, ratios, score_map_size):
     anchor_num = len(scales) * len(ratios)  # 每个位置的锚框数量
     anchor = np.zero((anchor_num, 4), dtype=np.float32)
     size = np.square(base_size)
+    count = 0
+    '''
+    原来的面积是 base_size*base_size=size, 改变后是base_size*(base_size*ratio)=size
+    所以计算新的边长是sqrt(size/ratio)
+    '''
     for ratio in ratios:
         w_scaled0 = int(np.sqrt(size / ratio))
         h_scaled0 = int(w_scaled0 * ratio)
         for scale in scales:
             w_scaled = w_scaled0 * scale
             h_scaled = h_scaled0 * scale
+            anchor[count, 0] = 0
+            anchor[count, 1] = 0
+            anchor[count, 2] = w_scaled
+            anchor[count, 3] = h_scaled
+            count += 1
+    # 把一个位置上的anchor配置复制到所有位置上
+    anchor = np.tile(anchor, score_map_size * score_map_size).reshape(-1, 4)
+    shift = (score_map_size // 2) * total_stride
+    xx, yy = np.meshgrid([-shift + total_stride * x for x in range(score_map_size)],
+                         [-shift + total_stride * y for y in range(score_map_size)])
+    xx, yy = np.tile(xx, (anchor_num, 1)).flatten(), np.tile(yy, (anchor_num, 1))
+    anchor[:, 0], anchor[:, 1] = xx.astype(np.float32), yy.astype(np.float32)
+    return anchor
