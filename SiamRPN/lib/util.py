@@ -105,5 +105,14 @@ def ajust_learning_rate(optimizer, decay=0.1):
     for param_group in optimizer.param_groups:
         param_group['lr'] = decay * param_group['lr']
 
-def generate_anchors():
-    pass
+
+def generate_anchors(total_stride, base_size, scales, ratios):
+    anchor_num = len(scales) * len(ratios)  # 每个位置的锚框数量
+    anchor = np.zero((anchor_num, 4), dtype=np.float32)
+    size = np.square(base_size)
+    for ratio in ratios:
+        w_scaled0 = int(np.sqrt(size / ratio))
+        h_scaled0 = int(w_scaled0 * ratio)
+        for scale in scales:
+            w_scaled = w_scaled0 * scale
+            h_scaled = h_scaled0 * scale

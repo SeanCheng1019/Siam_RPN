@@ -10,7 +10,6 @@ from lib.dataset import GetDataSet
 import pickle
 
 
-
 def train(data_dir, model_path=None, vis_flag=None, init=None):
     # 得到所有视频序列（已处理）
     meta_data_path = os.path.join(data_dir, "meta_data.pkl")
@@ -34,7 +33,7 @@ def train(data_dir, model_path=None, vis_flag=None, init=None):
     ])
 
     # get train dataset
-    train_dataset = GetDataSet(train_sequences, data_dir, train_z_transforms, train_x_transforms, meta_data, training=True)
-
+    train_dataset = GetDataSet(train_sequences, data_dir, train_z_transforms, train_x_transforms, meta_data,
+                               training=True)
 
     # get valid dataset

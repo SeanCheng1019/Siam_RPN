@@ -19,6 +19,7 @@ class GetDataSet(Dataset):
         self.meta_data = meta_data
         # 初始化的时候，把在一个序列里只出现2帧以内的目标筛除掉。
         self.meta_data = {x[0]: x[1] for x in meta_data}
+        # 训练模式都是从一个序列中成对成对的去选的
         self.num = len(sequence_names) if not training else \
             Config.pairs_per_sequence_per_epoch * len(sequence_names)
         for track_sequence_name in self.meta_data.keys():
@@ -26,6 +27,8 @@ class GetDataSet(Dataset):
             for object_id in track_sequence_info.keys():
                 if len(track_sequence_info[object_id]) < 2:
                     del track_sequence_info[object_id]
+        self.training = training
+
         self.anchors = generate_anchors()
 
     def __getitem__(self, index):  # 何时调用的，何时传入的index参数
