@@ -36,6 +36,7 @@ class GetDataSet(Dataset):
     def __getitem__(self, index):  # 何时调用的，何时传入的index参数
         all_idx = np.arange(self.num)
         np.random.shuffle(all_idx)
+        # 先选一个序列，然后序列里选个目标，然后选择一帧。
         for idx in all_idx:
             index = index % len(self.sequence_names)
             sequence = self.sequence_names[index]
@@ -49,7 +50,10 @@ class GetDataSet(Dataset):
             exemplar_index = np.random.choice(list(range(len(trk_frames))))
             exemplar_name = glob(os.path.join(self.data_dir, sequence, trk_frames[exemplar_index] +
                                               ".{:02d}.patch*.jpg".format(trkid)))[0]
-            
+            exemplar_gt_w, exemplar_gt_h, exemplar_img_w, exemplar_img_h = \
+                float(exemplar_name.split('/')[-1].split('_')[2]), float(exemplar_name.split('/')[-1].split('_')[4][1:])
+            float(exemplar_name.split('/')[-1].split('_')[7]), float(exemplar_name.split('/')[-1].split('_')[-1][:-4])
 
-    def __len__(self) -> int:
-        return super().__len__()
+
+def __len__(self) -> int:
+    return super().__len__()
