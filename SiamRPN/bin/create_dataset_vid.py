@@ -54,6 +54,7 @@ def process_single_document_data(sequence_dir, output_dir):
             bbox = np.array(
                 [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2, bbox[2] - bbox[0] + 1, bbox[3] - bbox[1] + 1]
             )
+            # 此处得到的w，h是resize后，目标的尺寸，已经不是原始图片上目标的尺寸
             instance_img, w, h, _ = get_instance_img(img, bbox, Config.exemplar_size, Config.instance_crop_size,
                                                      Config.context_margin_amount, img_mean)
             instance_img_save_path = os.path.join(save_folder, filename +

@@ -14,3 +14,10 @@ class Config:
     anchor_num = len(anchor_ratio) * len(anchor_ratio)
     anchor_base_size = 8
     score_map_size = (instance_size - exemplar_size) / total_stride + 1
+    scale_range = (0.001, 0.7)
+    ratio_range = (0.1, 10)
+    frame_range = 100
+    sample_type = 'uniform'
+    gray_ratio = 0.25
+    scale_resize = 0.15  # 训练时对instance_img的缩放
+    exemplar_stretch = False

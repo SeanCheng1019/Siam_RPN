@@ -22,11 +22,12 @@ def get_instance_img(img, bbox, size_z, size_x, context_margin_amount, img_mean=
     cx, cy, w, h = bbox
     w_context = w + context_margin_amount * (w + h)
     h_context = h + context_margin_amount * (w + h)
-    # 还没缩放尺寸前的exemplar patch size
+    # 还没缩放尺寸前的exemplar patch size， 是个正方形patch，但是尺寸还没缩放到127/255之类的
     size_original_exemplar = np.sqrt(w_context * h_context)
     scale_ratio = size_z / size_original_exemplar
     size_original_instance = size_original_exemplar * (size_x / size_z)
     instance_img, scale_ratio_x = crop_and_pad(img, cx, cy, size_x, size_original_instance, img_mean)
+    # 因为resize过，所以目标的尺寸要从原图乘上resize的ratio
     w_instance = w * scale_ratio_x
     h_instance = h * scale_ratio_x
     return instance_img, w_instance, h_instance, scale_ratio_x
@@ -66,11 +67,6 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
         tmp_img = np.zeros((im_h + top_pad + bottom_pad, im_w + left_pad + right_pad, im_c), np.uint8)
         # 把原图的值赋上
         tmp_img[top_pad:top_pad + im_h, left_pad:left_pad + im_w, :] = img
-
-        tmp_img = np.zeros((im_h + top_pad + bottom_pad, im_w + left_pad + right_pad, im_c), np.uint8)
-        # 把原图的值赋上
-        tmp_img[top_pad:top_pad + im_h, left_pad:left_pad + im_w, :] = img
-
         if top_pad:
             tmp_img[0:top_pad, left_pad:left_pad + im_w, :] = img_mean
         if bottom_pad:
@@ -84,7 +80,7 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
     else:
         # 无填充的情况下，直接在原图上裁剪
         img_patch_original = img[int(ymin):int(ymax + 1), int(xmin):int(xmax + 1), :]
-    if not np.array_equal(model_size, original_exemplar_size):
+    if not np.array_equal(model_size, original_exemplar_size):  # resize到config里定义的尺寸。
         img_patch = cv2.resize(img_patch_original, (model_size, model_size))
     else:
         img_patch = img_patch_original
@@ -97,8 +93,29 @@ def round_up(value):
     return round(value + 1e-6 + 1000) - 1000
 
 
-def compute_iou(anchors, gt):
-    pass
+def box_delta_in_gt_anchor(anchors, gt_box):
+    anchor_cx = anchors[:, :1]
+    anchor_cy = anchors[:, 1:2]
+    anchor_w = anchors[:, 2:3]
+    anchor_h = anchors[:, 3:]
+    gt_cx, gt_cy, gt_w, gt_h = gt_box
+    # 论文里的公式
+    delta_x = (gt_cx - anchor_cx) / anchor_w
+    delta_y = (gt_cy - anchor_cy) / anchor_h
+    delta_w = np.log(gt_w / anchor_w)
+    delta_h = np.log(gt_h / anchor_h)
+    regression_target = np.hstack((delta_x, delta_y, delta_w, delta_h))
+    return regression_target
+
+
+def compute_iou(anchors, box):
+    if np.array(anchors).ndim == 1:
+        anchors = np.array(anchors)[None, :]
+    elif np.array(box).ndim == 1:
+        box = np.array(box)[None, :]
+    else:
+        
+
 
 
 def ajust_learning_rate(optimizer, decay=0.1):
