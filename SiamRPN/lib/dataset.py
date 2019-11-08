@@ -99,9 +99,6 @@ class GetDataSet(Dataset):
             if Config.exemplar_stretch:
                 pass
 
-
-
-
     def imread(self, img_dir):
         img = cv2.imread(img_dir)
         return img
@@ -121,7 +118,6 @@ class GetDataSet(Dataset):
     def randomStretch(self, origin_img, gt_w, gt_h):
         scale_h = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
         scale_w = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
-
 
     def __len__(self) -> int:
         return super().__len__()

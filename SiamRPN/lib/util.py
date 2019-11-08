@@ -113,8 +113,8 @@ def compute_iou(anchors, box):
         anchors = np.array(anchors)[None, :]
     elif np.array(box).ndim == 1:
         box = np.array(box)[None, :]
-    else:
-        
+
+
 
 
 
