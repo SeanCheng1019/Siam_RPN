@@ -97,7 +97,7 @@ class GetDataSet(Dataset):
                 instance_img = cv2.cvtColor(instance_img, cv2.COLOR_RGB2GRAY)
                 instance_img = cv2.cvtColor(instance_img, cv2.COLOR_GRAY2RGB)
             if Config.exemplar_stretch:
-                pass
+                
 
     def imread(self, img_dir):
         img = cv2.imread(img_dir)
