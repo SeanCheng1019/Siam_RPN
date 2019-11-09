@@ -1,7 +1,7 @@
 from torch.utils.data.dataset import Dataset
 import numpy as np
 from net.config import Config
-from lib.util import generate_anchors
+from lib.util import generate_anchors, crop_and_pad, box_delta_in_gt_anchor
 from glob import glob
 import os
 import cv2
@@ -32,6 +32,9 @@ class GetDataSet(Dataset):
                     del track_sequence_info[object_id]
         self.training = training
         self.max_stretch = Config.scale_resize  # 干啥用
+        self.max_shift = Config.max_shift
+        self.center_crop_size = Config.exemplar_size  # 裁剪模版用的尺寸
+        self.random_crop_size = Config.instance_size  # 裁剪搜索区域用的尺寸
         self.anchors = generate_anchors(Config.total_stride, Config.anchor_base_size, Config.anchor_scales,
                                         Config.anchor_ratio, Config.score_map_size)
 
@@ -64,6 +67,7 @@ class GetDataSet(Dataset):
                 continue
             if not Config.ratio_range[0] <= exemplar_ratio < Config.ratio_range[1]:
                 continue
+            # 选到模版图片
             exemplar_img = self.imread(exemplar_whole_path_name)
             # 开始选instance image
             frame_range = Config.frame_range
@@ -89,15 +93,41 @@ class GetDataSet(Dataset):
                 continue
             if not Config.ratio_range[0] <= instance_ratio < Config.ratio_range[1]:
                 continue
+            # 选得搜索图片
             instance_img = self.imread(instance_whole_path_name)
             # 进行图片随机色彩空间转换，一种数据增强
-            if np.random.rand(1) < Config.gray_ratio:  # 这里为什么转了2次
+            if np.random.rand(1) < Config.gray_ratio:  # 这里为什么要转了2次
                 exemplar_img = cv2.cvtColor(exemplar_img, cv2.COLOR_RGB2GRAY)
                 exemplar_img = cv2.cvtColor(exemplar_img, cv2.COLOR_GRAY2RGB)
                 instance_img = cv2.cvtColor(instance_img, cv2.COLOR_RGB2GRAY)
                 instance_img = cv2.cvtColor(instance_img, cv2.COLOR_GRAY2RGB)
             if Config.exemplar_stretch:
-                
+                # 再次缩放尺寸
+                exemplar_img, exemplar_gt_w, exemplar_gt_h = self.randomStretch(exemplar_img,
+                                                                                exemplar_gt_h)
+            # 若有放缩的操作后，要保证尺寸要回到规定的尺寸
+            exemplar_img, _ = crop_and_pad(exemplar_img, (exemplar_img.shape[0] - 1) / 2,
+                                           (exemplar_img.shape[1] - 1) / 2, self.center_crop_size,
+                                           self.center_crop_size)
+            instance_img, instance_gt_w, instance_gt_h = self.randomStretch(instance_img, instance_gt_w,
+                                                                            instance_gt_h)
+            img_h, img_w, _ = instance_img.shape
+            cx_origin, cy_origin = (img_w - 1) / 2, (img_h - 1) / 2
+            cx_add_shift, cy_add_shift = cx_origin + np.random.randint(-self.max_shift, self.max_shift)
+            instance_img, scale = crop_and_pad(instance_img, cx_add_shift, cy_add_shift,
+                                               self.random_crop_size, self.random_crop_size)
+            # x和y的相对位置，相对于中心点的
+            instance_gt_shift_cx, instance_gt_shift_cy = cx_add_shift - cx_origin, cy_add_shift - cy_origin
+            exemplar_img, instance_img = self.z_transforms(exemplar_img), self.x_transforms(instance_img)
+            # 训练时，将回归分支锚框和gt的差返回，将分类分支锚框label返回
+            # 这里的cx，cy，以及训练时预测的cx，cy都是相对位置，相对于中心点的
+            regression_target, classification_target = self.compute_target(self.anchors,
+                                                                           np.array(list(map(round,
+                                                                                             [instance_gt_shift_cx,
+                                                                                              instance_gt_shift_cy,
+                                                                                              instance_gt_w,
+                                                                                              instance_gt_h]))))
+            return exemplar_img, instance_img, regression_target, classification_target.astype(np.int64)
 
     def imread(self, img_dir):
         img = cv2.imread(img_dir)
@@ -116,8 +146,19 @@ class GetDataSet(Dataset):
         return weights / sum(weights)
 
     def randomStretch(self, origin_img, gt_w, gt_h):
-        scale_h = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
-        scale_w = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
+        random_scale_h = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
+        random_scale_w = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
+        h, w = origin_img.shape[:2]
+        shape = int(w * random_scale_w), int(h * random_scale_h)
+        scaled_w, scaled_h = int(shape[0] / w), int(shape[1] / h)
+        gt_w = scaled_w * gt_w
+        gt_h = scaled_h * gt_h
+        return cv2.resize(origin_img, shape, cv2.INTER_LINEAR), gt_w, gt_h
+
+    def compute_target(self, anchors, box):
+        regression_target = box_delta_in_gt_anchor(anchors, box)
+        classification_target =
+        return regression_target, classification_target
 
     def __len__(self) -> int:
         return super().__len__()

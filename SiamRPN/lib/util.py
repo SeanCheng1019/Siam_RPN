@@ -13,9 +13,16 @@ def xyxy2cxcywh(bbox):
            (bbox[3] - bbox[1])
 
 
-def cxcywh2xyxy(bbox):
-    cx, cy, w, h = bbox
-    return cx - 1 / 2 * w, cy - 1 / 2 * h, cx + 1 / 2 * w, cy + 1 / 2 * h
+def cxcywh2xyxy(bboxes):
+    if len(np.array(bboxes).shape) == 1:
+        bboxes = np.array(bboxes)[None, :]
+    else:
+        bboxes = np.array(bboxes)
+    x1 = bboxes[:, 0:1] - bboxes[:, 2:3] + 0.5
+    x2 = x1 + bboxes[:, 2:3] - 1
+    y1 = bboxes[:, 1:2] - bboxes[:, 3:4] + 0.5
+    y2 = y1 + bboxes[:, 2:3] - 1
+    return np.concatenate([x1, y1, x2, y2], 1)
 
 
 def get_instance_img(img, bbox, size_z, size_x, context_margin_amount, img_mean=None):
@@ -94,6 +101,7 @@ def round_up(value):
 
 
 def box_delta_in_gt_anchor(anchors, gt_box):
+    # 这里gt_box的cx，cy是相对位置，相对于中心点
     anchor_cx = anchors[:, :1]
     anchor_cy = anchors[:, 1:2]
     anchor_w = anchors[:, 2:3]
@@ -109,14 +117,18 @@ def box_delta_in_gt_anchor(anchors, gt_box):
 
 
 def compute_iou(anchors, box):
+    # 为了计算的时候维度匹配
     if np.array(anchors).ndim == 1:
         anchors = np.array(anchors)[None, :]
-    elif np.array(box).ndim == 1:
+    else:
+        anchors = np.array(anchors)
+    if np.array(box).ndim == 1:
         box = np.array(box)[None, :]
-
-
-
-
+    else:
+        box = np.array(box)
+    # 将gt_box的个数复制到和锚框的个数一样
+    gt_box = np.tile(box.reshape(1, -1), (anchors.shape[0], 1))
+    
 
 def ajust_learning_rate(optimizer, decay=0.1):
     for param_group in optimizer.param_groups:
@@ -148,6 +160,6 @@ def generate_anchors(total_stride, base_size, scales, ratios, score_map_size):
     shift = (score_map_size // 2) * total_stride
     xx, yy = np.meshgrid([-shift + total_stride * x for x in range(score_map_size)],
                          [-shift + total_stride * y for y in range(score_map_size)])
-    xx, yy = np.tile(xx, (anchor_num, 1)).flatten(), np.tile(yy, (anchor_num, 1))
+    xx, yy = np.tile(xx, (anchor_num, 1)).flatten(), np.tile(yy, (anchor_num, 1)).flatten()
     anchor[:, 0], anchor[:, 1] = xx.astype(np.float32), yy.astype(np.float32)
     return anchor

@@ -20,4 +20,5 @@ class Config:
     sample_type = 'uniform'
     gray_ratio = 0.25
     scale_resize = 0.15  # 训练时对instance_img的缩放
+    max_shift = 12       # 训练时对中心的最大偏移量
     exemplar_stretch = False
