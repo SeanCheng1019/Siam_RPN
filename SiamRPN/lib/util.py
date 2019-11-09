@@ -128,7 +128,14 @@ def compute_iou(anchors, box):
         box = np.array(box)
     # 将gt_box的个数复制到和锚框的个数一样
     gt_box = np.tile(box.reshape(1, -1), (anchors.shape[0], 1))
-    
+    anchor_x1 = anchors[:, :1] - anchors[:, 2:3] / 2 + 0.5
+    anchor_x2 = anchors[:, :1] + anchors[:, 2:3] / 2 - 0.5
+    anchor_y1 = anchors[:, 1:2] - anchors[:, 3:] / 2 + 0.5
+    anchor_y2 = anchors[:, 1:2] + anchors[:, 3:] / 2 - 0.5
+    gt_x1 = gt_box[:, :1] - gt_box[:, 2:3] / 2 + 0.5
+    gt_x2 = gt_box[:, :1] + gt_box[:, 2:3] / 2 - 0.5
+    gt_y1 = gt_box[:, 1:2] - gt_box[:, 3:] / 2 + 0.5
+    gt_y2 = gt_box[:, 1:2] + gt_box[:, 3:] / 2 - 0.5
 
 def ajust_learning_rate(optimizer, decay=0.1):
     for param_group in optimizer.param_groups:
