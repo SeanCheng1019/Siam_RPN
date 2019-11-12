@@ -1,7 +1,7 @@
 from torch.utils.data.dataset import Dataset
 import numpy as np
 from net.config import Config
-from lib.util import generate_anchors, crop_and_pad, box_delta_in_gt_anchor
+from lib.util import generate_anchors, crop_and_pad, box_delta_in_gt_anchor, compute_iou
 from glob import glob
 import os
 import cv2
@@ -121,13 +121,13 @@ class GetDataSet(Dataset):
             exemplar_img, instance_img = self.z_transforms(exemplar_img), self.x_transforms(instance_img)
             # 训练时，将回归分支锚框和gt的差返回，将分类分支锚框label返回
             # 这里的cx，cy，以及训练时预测的cx，cy都是相对位置，相对于中心点的
-            regression_target, classification_target = self.compute_target(self.anchors,
-                                                                           np.array(list(map(round,
-                                                                                             [instance_gt_shift_cx,
-                                                                                              instance_gt_shift_cy,
-                                                                                              instance_gt_w,
-                                                                                              instance_gt_h]))))
-            return exemplar_img, instance_img, regression_target, classification_target.astype(np.int64)
+            regression_target, cls_label_map = self.compute_target(self.anchors,
+                                                                   np.array(list(map(round,
+                                                                                     [instance_gt_shift_cx,
+                                                                                      instance_gt_shift_cy,
+                                                                                      instance_gt_w,
+                                                                                      instance_gt_h]))))
+            return exemplar_img, instance_img, regression_target, cls_label_map.astype(np.int64)
 
     def imread(self, img_dir):
         img = cv2.imread(img_dir)
@@ -157,8 +157,13 @@ class GetDataSet(Dataset):
 
     def compute_target(self, anchors, box):
         regression_target = box_delta_in_gt_anchor(anchors, box)
-        classification_target =
-        return regression_target, classification_target
+        anchors_iou = compute_iou(anchors, box)
+        pos_index = np.where(anchors_iou > Config.iou_pos_threshold)[0]
+        neg_index = np.where(anchors_iou < Config.iou_neg_threshold)[0]
+        cls_label_map = np.ones_like(anchors_iou) * -1
+        cls_label_map[pos_index] = 1
+        cls_label_map[neg_index] = 0
+        return regression_target, cls_label_map
 
-    def __len__(self) -> int:
-        return super().__len__()
+    def __len__(self):
+        return len(self.num)

@@ -18,11 +18,11 @@ def cxcywh2xyxy(bboxes):
         bboxes = np.array(bboxes)[None, :]
     else:
         bboxes = np.array(bboxes)
-    x1 = bboxes[:, 0:1] - bboxes[:, 2:3] + 0.5
+    x1 = bboxes[:, 0:1] - bboxes[:, 2:3] / 2 + 0.5
     x2 = x1 + bboxes[:, 2:3] - 1
-    y1 = bboxes[:, 1:2] - bboxes[:, 3:4] + 0.5
+    y1 = bboxes[:, 1:2] - bboxes[:, 3:4] / 2 + 0.5
     y2 = y1 + bboxes[:, 2:3] - 1
-    return np.concatenate([x1, y1, x2, y2], 1)
+    return np.concatenate([x1, y1, x2, y2], 1), x1, x2, y1, y2
 
 
 def get_instance_img(img, bbox, size_z, size_x, context_margin_amount, img_mean=None):
@@ -128,14 +128,28 @@ def compute_iou(anchors, box):
         box = np.array(box)
     # 将gt_box的个数复制到和锚框的个数一样
     gt_box = np.tile(box.reshape(1, -1), (anchors.shape[0], 1))
-    anchor_x1 = anchors[:, :1] - anchors[:, 2:3] / 2 + 0.5
-    anchor_x2 = anchors[:, :1] + anchors[:, 2:3] / 2 - 0.5
-    anchor_y1 = anchors[:, 1:2] - anchors[:, 3:] / 2 + 0.5
-    anchor_y2 = anchors[:, 1:2] + anchors[:, 3:] / 2 - 0.5
-    gt_x1 = gt_box[:, :1] - gt_box[:, 2:3] / 2 + 0.5
-    gt_x2 = gt_box[:, :1] + gt_box[:, 2:3] / 2 - 0.5
-    gt_y1 = gt_box[:, 1:2] - gt_box[:, 3:] / 2 + 0.5
-    gt_y2 = gt_box[:, 1:2] + gt_box[:, 3:] / 2 - 0.5
+    _, anchor_x1, anchor_x2, anchor_y1, anchor_y2 = cxcywh2xyxy(anchors)
+    _, gt_x1, gt_x2, gt_y1, gt_y2 = cxcywh2xyxy(gt_box)
+    # anchor_x1 = anchors[:, :1] - anchors[:, 2:3] / 2 + 0.5
+    # anchor_x2 = anchors[:, :1] + anchors[:, 2:3] / 2 - 0.5
+    # anchor_y1 = anchors[:, 1:2] - anchors[:, 3:] / 2 + 0.5
+    # anchor_y2 = anchors[:, 1:2] + anchors[:, 3:] / 2 - 0.5
+    # gt_x1 = gt_box[:, :1] - gt_box[:, 2:3] / 2 + 0.5
+    # gt_x2 = gt_box[:, :1] + gt_box[:, 2:3] / 2 - 0.5
+    # gt_y1 = gt_box[:, 1:2] - gt_box[:, 3:] / 2 + 0.5
+    # gt_y2 = gt_box[:, 1:2] + gt_box[:, 3:] / 2 - 0.5
+    overlap_x1 = np.max([anchor_x1, gt_x1], axis=0)
+    overlap_x2 = np.min([anchor_x2, gt_x2], axis=0)
+    overlap_y1 = np.max([anchor_y1, gt_y1], axis=0)
+    overlap_y2 = np.min([anchor_y2, gt_y2], axis=0)
+    # 要注意到没有交集的情况，x2-x1就会出现负数，就没有意义，所以要限制最小是0
+    overlap_area = np.max([(overlap_x2 - overlap_x1), np.zeros(overlap_x1)], axis=0) \
+                   * np.max([(overlap_y2 - overlap_y1), np.zeros(overlap_x1.shape)], axis=0)
+    anchor_area = (anchor_x2 - anchor_x1) * (anchor_y2 - anchor_y1)
+    gt_area = (gt_x2 - gt_x1) * (gt_y2 - gt_y1)
+    iou = overlap_area / (anchor_area + gt_area - overlap_area + 1e-6)
+    return iou
+
 
 def ajust_learning_rate(optimizer, decay=0.1):
     for param_group in optimizer.param_groups:
