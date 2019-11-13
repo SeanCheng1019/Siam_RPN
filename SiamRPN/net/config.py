@@ -39,3 +39,7 @@ class Config:
     weight_dacay = 0.0005  # weight decay of optimizator
     pretrained_model = ' '
     fix_former_3_layers = True
+    num_pos = 16
+    num_neg = 48
+    ohem_pos = False
+    ohem_neg = False

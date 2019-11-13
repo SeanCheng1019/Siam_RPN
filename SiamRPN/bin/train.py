@@ -12,7 +12,7 @@ import torch.nn as nn
 from tensorboardX import SummaryWriter
 from lib.custom_transforms import RandomStretch, ToTensor
 from lib.dataset import GetDataSet
-from lib.loss import rpn_cross_entropy
+from lib.loss import rpn_cross_entropy_banlance
 from net.net_siamrpn import SiameseAlexNet
 import pickle
 
@@ -42,6 +42,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
     # get train dataset
     train_dataset = GetDataSet(train_sequences, data_dir, train_z_transforms, train_x_transforms, meta_data,
                                training=True)
+    anchors = train_dataset.anchors
     # get valid dataset
     valid_dataset = GetDataSet(valid_sequences, data_dir, valid_z_transforms, valid_x_transforms, meta_data,
                                training=False)
@@ -143,4 +144,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             pred_regression = pred_regression.reshape(-1, 4,
                                                       Config.anchor_num * Config.score_map_size *
                                                       Config.score_map_size).permute(0, 2, 1)
-            cls_loss =
+            cls_loss = rpn_cross_entropy_banlance(pred_cls_score, cls_label_map, Config.num_pos,
+                                                  Config.num_neg, anchors,
+                                                  ohem_pos=Config.ohem_pos, ohem_neg=Config.ohem_neg)
+            reg_loss =

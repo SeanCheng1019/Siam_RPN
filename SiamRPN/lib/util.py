@@ -151,6 +151,24 @@ def compute_iou(anchors, box):
     return iou
 
 
+def nms(bboxes, scores, num, threshold=0.7):
+    '''
+    先找到得分最大的框，然后其他框和这个最大的分的框计算iou，超过0.7的框都去除，其他的保留。
+    '''
+    sort_index = np.argsort(scores)[::-1]
+    ordered_bboxes = bboxes[sort_index]
+    selected_bbox = [ordered_bboxes[0]]
+    selected_index = [sort_index[0]]
+    for i, bbox in enumerate(ordered_bboxes):
+        iou = compute_iou(selected_bbox, bbox)
+        if np.max(iou) < threshold:
+            selected_bbox.append(bbox)
+            selected_index.append(sort_index[i])
+            if len(selected_bbox) >= num:
+                break
+    return selected_index
+
+
 def ajust_learning_rate(optimizer, decay=0.1):
     for param_group in optimizer.param_groups:
         param_group['lr'] = decay * param_group['lr']
