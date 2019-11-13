@@ -113,6 +113,7 @@ class GetDataSet(Dataset):
                                                                             instance_gt_h)
             img_h, img_w, _ = instance_img.shape
             cx_origin, cy_origin = (img_w - 1) / 2, (img_h - 1) / 2
+            # 加中心偏移，减轻只在中心找目标的趋势
             cx_add_shift, cy_add_shift = cx_origin + np.random.randint(-self.max_shift, self.max_shift)
             instance_img, scale = crop_and_pad(instance_img, cx_add_shift, cy_add_shift,
                                                self.random_crop_size, self.random_crop_size)

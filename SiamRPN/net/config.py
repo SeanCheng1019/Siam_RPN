@@ -37,3 +37,5 @@ class Config:
             np.logspace(np.log10(start_lr), np.log10(end_lr), num=epoch)[0]
     momentum = 0.9
     weight_dacay = 0.0005  # weight decay of optimizator
+    pretrained_model = ' '
+    fix_former_3_layers = True
