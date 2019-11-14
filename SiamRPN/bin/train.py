@@ -10,9 +10,11 @@ from torchvision.transforms import transforms
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from tensorboardX import SummaryWriter
+from collections import OrderedDict
 from lib.custom_transforms import RandomStretch, ToTensor
 from lib.dataset import GetDataSet
-from lib.loss import rpn_cross_entropy_banlance
+from lib.loss import rpn_cross_entropy_banlance, rpn_smoothL1
+from lib.util import ajust_learning_rate
 from net.net_siamrpn import SiameseAlexNet
 import pickle
 
@@ -123,7 +125,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
 
     if t.cuda.device_count() > 1:
         model = nn.DataParallel(model)
-    for epoch in range(start_epoch, Config.epoch):
+    for epoch in range(start_epoch, Config.epoch + 1):
         train_loss = []
         model.train()  # 设置为训练模式 train=True
         if Config.fix_former_3_layers:
@@ -131,6 +133,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                 freeze_layers(model.module)
             else:
                 freeze_layers(model)
+        # 为了训练时在终端打印实时loss设置的
         loss_temp_cls = 0
         loss_temp_reg = 0
         for i, data in enumerate(tqdm(trainloader)):
@@ -147,4 +150,70 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             cls_loss = rpn_cross_entropy_banlance(pred_cls_score, cls_label_map, Config.num_pos,
                                                   Config.num_neg, anchors,
                                                   ohem_pos=Config.ohem_pos, ohem_neg=Config.ohem_neg)
-            reg_loss =
+            reg_loss = rpn_smoothL1(pred_regression, regression_target, cls_label_map,
+                                    Config.num_pos, ohem=Config.ohem_reg)
+            loss = cls_loss + Config.lamb * reg_loss
+            # 梯度清零
+            optimizer.zero_grad()
+            # 反向传播求梯度
+            loss.backward()
+            t.nn.utils.clip_grad_norm_(model.parameters(), Config.clip)
+            # 更新参数
+            optimizer.step()
+            step = (epoch - 1) * len(trainloader) + i
+            summary_writer.add_scalar('train/cls_loss', cls_loss.data, step)
+            summary_writer.add_scalar('train/reg_loss', reg_loss.data, step)
+            # 加入总loss
+            train_loss.append(loss.detach().cpu())
+            loss_temp_cls += cls_loss.detach().cpu().numpy()
+            loss_temp_reg += reg_loss.detach().cpu().numpy()
+            if (i + 1) % Config.show_interval == 0:
+                tqdm.write("[epoch %2d][iter %4d] cls_loss: %.4f, reg_loss: %.4f, lr: %.2e"
+                           % (epoch, i, loss_temp_cls / Config.show_interval,
+                              loss_temp_reg / Config.show_interval, optimizer.param_group[0]['lr']))
+                loss_temp_cls = 0
+                loss_temp_reg = 0
+                if vis_port:
+                    pass
+        train_loss = np.mean(train_loss)
+
+        # finish training an epoch, starting validation
+        valid_loss = []
+        model.eval()
+        for i, data in enumerate(tqdm(validloader)):
+            exemplar_imgs, instance_imgs, regression_target, cls_label_map = data
+            regression_target, cls_label_map = regression_target.cuda(), cls_label_map.cuda()
+            pred_regression, pred_cls_score = model(exemplar_imgs.cuda(), instance_imgs.cuda())
+            pred_cls_score = pred_cls_score.reshape(-1, 2,
+                                                    Config.anchor_num *
+                                                    Config.score_map_size *
+                                                    Config.score_map_size).permute(0, 2, 1)
+            pred_regression = pred_regression.reshape(-1, 4,
+                                                      Config.anchor_num * Config.score_map_size *
+                                                      Config.score_map_size).permute(0, 2, 1)
+            cls_loss = rpn_cross_entropy_banlance(pred_cls_score, cls_label_map, Config.num_pos,
+                                                  Config.num_neg, anchors, ohem_pos=Config.ohem_pos,
+                                                  ohem_neg=Config.ohem_neg)
+            loss = pred_regression + Config.lamb * cls_loss
+            valid_loss.append(loss.detach().cpu())
+        valid_loss = np.mean(valid_loss)
+        print("[EPOCH %2d] valid_loss: %.4f, train_loss: %.4f" % (epoch, valid_loss, train_loss))
+        # 这里验证集的add_scalar的step参数和之前训练时候的不同
+        summary_writer.add_scalar('valid/loss', valid_loss, (epoch + 1) * len(trainloader))
+        ajust_learning_rate(optimizer, Config.gamma)
+        # save model
+        if epoch % Config.save_interval == 0:
+            if not os.path.exists('./data/models/'):
+                os.mkdir('./data/models/')
+            save_name = './data/models/siamrpn_epoch_{}.pth'.format(epoch)
+            if t.cuda.device_count() > 1:
+                new_state_dict = OrderedDict()
+                for k, v in model.state_dict().items():
+                    new_state_dict[k] = v
+            new_state_dict = model.state_dict()
+            t.save({
+                'epoch': epoch,
+                'model': new_state_dict,
+                'optimizer': optimizer.state_dict(),
+            }, save_name)
+            print('save model as:{}'.format(save_name))

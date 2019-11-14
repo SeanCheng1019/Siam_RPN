@@ -69,10 +69,13 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
                 selected_neg_index = nms(anchors[neg_index], neg_loss_temp.cpu().detach().numpy(), num_neg)
                 neg_loss_final = neg_loss_temp[selected_neg_index]
         else:
+            # 随机选出min_neg个数的负样本
             if len(pos_index) > 0:
                 neg_index_random = random.sample(neg_index.tolist(), min_neg)
                 neg_loss_final = F.cross_entropy(input=input[batch_id][neg_index_random],
+
                                                  target=target[batch_id][neg_index_random], reduction='none')
+            # 对所有的负样本进行损失计算
             else:
                 # 全部是负样本
                 neg_index_random = random.sample(neg_index.tolist(), num_neg)
@@ -90,23 +93,29 @@ def rpn_smoothL1(input, target, label, num_pos, ohem=None):
     :param target: torch.size([1,15*15*5,4])
     :param label: torch.size([1,15*15*5])
     """
-    loss_all=[]
+    loss_all = []
     for batch_id in range(target.shape[0]):
+        # 只对正样本进行回归
         pos_index = np.where(target[batch_id].cpu() == 1)[0]
         min_pos = min(len(pos_index), num_pos)
         if ohem:
-            pass
+            if len(pos_index) > 0:
+                # loss的维度是？
+                loss = F.smooth_l1_loss(input=input[batch_id][pos_index],
+                                        target=target[batch_id][pos_index], reduction='none')
+                sort_index = t.argsort(loss.mean(1))
+                loss_ohem = loss[sort_index[-num_pos:]]
+            else:
+                loss_ohem = t.FloatTensor([0]).cuda()[0]
+            loss_all.append(loss_ohem.mean())
+
         else:
             pos_index = random.sample(pos_index.tolist(), min_pos)
             if len(pos_index) > 0:
+                loss = F.smooth_l1_loss(input=input[batch_id][pos_index],
+                                        target=target[batch_id][pos_index])
             else:
                 loss = t.FloatTensor([0]).cuda()[0]
-
-
-
-
-
-
-
-
-
+            loss_all.append(loss.mean())
+    final_loss = t.stack(loss_all).mean()
+    return final_loss

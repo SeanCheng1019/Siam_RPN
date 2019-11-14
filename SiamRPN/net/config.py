@@ -43,3 +43,8 @@ class Config:
     num_neg = 48
     ohem_pos = False
     ohem_neg = False
+    ohem_reg = False
+    lamb = 5
+    clip = 10
+    show_interval = 100
+    save_interval = 1
