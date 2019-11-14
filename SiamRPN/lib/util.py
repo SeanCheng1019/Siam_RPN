@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import torch as t
 
 
 def get_center(x):
@@ -116,6 +117,24 @@ def box_delta_in_gt_anchor(anchors, gt_box):
     return regression_target
 
 
+def box_transform_use_reg_offset(anchors, offsets):
+    """
+    用预测的偏移量计算出box的cx,cy,w,h
+    """
+    anchor_cx = anchors[:, :1]
+    anchor_cy = anchors[:, 1:2]
+    anchor_w = anchors[:, 2:3]
+    anchor_h = anchors[:, 3:]
+    offsets_x, offsets_y, offsets_w, offsets_h = offsets[:, :1], offsets[:, 1:2], \
+                                                 offsets[:, 2:3], offsets[:, 3:]
+    box_cx = anchor_w * offsets_x + anchor_cx
+    box_cy = anchor_h * offsets_y + anchor_cy
+    box_w = anchor_w * np.exp(offsets_w)
+    box_h = anchor_h * np.exp(offsets_h)
+    boxes = np.stack([box_cx, box_cy, box_w, box_h])
+    return boxes
+
+
 def compute_iou(anchors, box):
     # 为了计算的时候维度匹配
     if np.array(anchors).ndim == 1:
@@ -202,3 +221,38 @@ def generate_anchors(total_stride, base_size, scales, ratios, score_map_size):
     xx, yy = np.tile(xx, (anchor_num, 1)).flatten(), np.tile(yy, (anchor_num, 1)).flatten()
     anchor[:, 0], anchor[:, 1] = xx.astype(np.float32), yy.astype(np.float32)
     return anchor
+
+
+def get_topK_box(cls_score, pred_regression, anchors, topk=10):
+    reg_offset = pred_regression.cpu().detach().numpy()
+    scores, index = t.topk(cls_score, topk)
+    index = index.view(-1).cpu().detach().numpy()  # debug时候看下数据转换
+    topk_offset = reg_offset[index, :]
+    anchors = anchors[index, :]
+    pred_box = box_transform_use_reg_offset(anchors, topk_offset)
+    return pred_box
+
+
+def add_box_img(img, boxes, color=(0, 255, 0)):
+    """
+    :param img:
+    :param boxes:  cx,cy,w,h  这里的cx，cy是否是相对中心点的相对位置？
+    :param color:
+    """
+    if boxes.ndim == 1:
+        boxes = boxes[None, :]
+    img = img.copy()
+    img_cx = (img.shape[1] - 1) / 2
+    img_cy = (img.shape[0] - 1) / 2
+    for box in boxes:
+        # 换成以左上角为原点的坐标
+        left_top_corner = [img_cx + box[0] - box[2] / 2 + 0.5, img_cy + box[1] - box[3] / 2 + 0.5]
+        right_bottom_corner = [img_cx + box[0] + box[2] / 2 - 0.5, img_cy + box[1] + box[3] / 2 - 0.5]
+        left_top_corner[0] = np.clip(left_top_corner[0], 0, img.shape[1])
+        right_bottom_corner[0] = np.clip(right_bottom_corner, 0, img.shape[1])
+        left_top_corner[1] = np.clip(left_top_corner[1], 0, img.shape[0])
+        right_bottom_corner[1] = np.clip(right_bottom_corner[1], 0, img.shape[0])
+        img = cv2.rectangle(img, (int(left_top_corner[0]), int(left_top_corner[1])),
+                            (int(right_bottom_corner[0]), int(right_bottom_corner[1])),
+                            color, 2)
+    return img

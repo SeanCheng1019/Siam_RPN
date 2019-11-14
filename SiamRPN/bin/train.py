@@ -9,12 +9,13 @@ from net.config import Config
 from torchvision.transforms import transforms
 from torch.utils.data import DataLoader
 import torch.nn as nn
+import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 from collections import OrderedDict
 from lib.custom_transforms import RandomStretch, ToTensor
 from lib.dataset import GetDataSet
 from lib.loss import rpn_cross_entropy_banlance, rpn_smoothL1
-from lib.util import ajust_learning_rate
+from lib.util import ajust_learning_rate, get_topK_box, add_box_img, compute_iou, box_transform_use_reg_offset
 from net.net_siamrpn import SiameseAlexNet
 import pickle
 
@@ -60,7 +61,9 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
     if not os.path.exists(Config.log_dir):
         os.mkdir(Config.log_dir)
     summary_writer = SummaryWriter(Config.log_dir)
-
+    # 可视化
+    if vis_port:
+        vis = vis_port(port=vis_port)
     # start training
     model = SiameseAlexNet()
     model = model.cuda()
@@ -173,8 +176,45 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                               loss_temp_reg / Config.show_interval, optimizer.param_group[0]['lr']))
                 loss_temp_cls = 0
                 loss_temp_reg = 0
+                # 可视化
                 if vis_port:
-                    pass
+                    anchors_show = train_dataset.anchors
+                    exem_img = exemplar_imgs[0].cpu().numpy().transpose(1, 2, 0)
+                    inst_img = instance_imgs[0].cpu().numpy().transpose(1, 2, 0)
+                    topk = Config.show_topK
+                    vis.plot_img(exem_img.transpose(2, 0, 1), win=1, name='exemplar_img')
+                    cls_pred = cls_label_map[0]  # 对这个存疑,看看cls_pred的内容
+                    gt_box = get_topK_box(cls_pred, regression_target[0], anchors_show)[0]
+                    # show gt box
+                    img_box = add_box_img(inst_img, gt_box, color=[255, 0, 0])
+                    vis.plot_img(img_box.transpose(2, 0, 1), win=2, name='instance_img')
+                    # show anchor with max score
+                    cls_pred = F.softmax(pred_cls_score, dim=2)[0, :, 1]
+                    scores, index = t.topk(cls_pred, k=topk)
+                    img_box = add_box_img(inst_img, anchors_show[index.cpu()])
+                    img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
+                    vis.plot_img(img_box.transpose(2, 0, 1), win=3, name='max_score_anchors')
+
+                    cls_pred = F.softmax(pred_cls_score, dim=2)[0, :, 1]
+                    topk_box = get_topK_box(cls_pred, pred_regression[0], anchors_show, topk=topk)
+                    img_box = add_box_img(inst_img, topk_box)
+                    img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
+                    vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_score_box')
+                    # show anchor with max iou
+                    iou = compute_iou(anchors_show, gt_box).flatten()
+                    index = np.argsort(iou)[-topk:]
+                    img_box = add_box_img(inst_img, anchors_show[index])
+                    img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
+                    vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_iou_anchor')
+                    # show detected box with max iou
+                    reg_offset = pred_regression[0].cpu().detach().numpy()
+                    topk_offset = reg_offset[index, :]
+                    anchors_det = anchors_show[index, :]
+                    pred_box = box_transform_use_reg_offset(anchors_det, topk_offset)
+                    img_box = add_box_img(inst_img, pred_box)
+                    img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
+                    vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_iou_box')
+
         train_loss = np.mean(train_loss)
 
         # finish training an epoch, starting validation

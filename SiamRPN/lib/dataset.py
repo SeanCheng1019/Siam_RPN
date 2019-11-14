@@ -118,7 +118,7 @@ class GetDataSet(Dataset):
             instance_img, scale = crop_and_pad(instance_img, cx_add_shift, cy_add_shift,
                                                self.random_crop_size, self.random_crop_size)
             # x和y的相对位置，相对于中心点的
-            instance_gt_shift_cx, instance_gt_shift_cy = cx_add_shift - cx_origin, cy_add_shift - cy_origin
+            instance_gt_shift_cx, instance_gt_shift_cy = cx_origin - cx_add_shift,  cy_origin - cy_add_shift
             exemplar_img, instance_img = self.z_transforms(exemplar_img), self.x_transforms(instance_img)
             # 训练时，将回归分支锚框和gt的差返回，将分类分支锚框label返回
             # 这里的cx，cy，以及训练时预测的cx，cy都是相对位置，相对于中心点的
@@ -135,6 +135,9 @@ class GetDataSet(Dataset):
         return img
 
     def sample_weights(self, center, low_idx, high_idx, sample_type='uniform'):
+        """
+         采样权重
+        """
         weights = list(range(low_idx, high_idx))
         weights.remove(center)
         weights = np.array(weights)
@@ -157,6 +160,10 @@ class GetDataSet(Dataset):
         return cv2.resize(origin_img, shape, cv2.INTER_LINEAR), gt_w, gt_h
 
     def compute_target(self, anchors, box):
+        """
+        :param box: 这里box的cx，cy是相对于中心点的相对位置
+        :return:
+        """
         regression_target = box_delta_in_gt_anchor(anchors, box)
         anchors_iou = compute_iou(anchors, box)
         pos_index = np.where(anchors_iou > Config.iou_pos_threshold)[0]

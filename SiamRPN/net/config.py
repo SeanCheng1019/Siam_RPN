@@ -48,3 +48,4 @@ class Config:
     clip = 10
     show_interval = 100
     save_interval = 1
+    show_topK = 3
