@@ -170,8 +170,12 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             # 更新参数
             optimizer.step()
             step = (epoch - 1) * len(trainloader) + i
-            summary_writer.add_scalar('train/cls_loss', cls_loss.data, step)
-            summary_writer.add_scalar('train/reg_loss', reg_loss.data, step)
+            # summary_writer.add_scalar('train/cls_loss', cls_loss.data, step)
+            # summary_writer.add_scalar('train/reg_loss', reg_loss.data, step)
+            summary_writer.add_scalars('train',
+                                      {'cls_loss': cls_loss.data.item(), 'reg_loss': reg_loss.data.item(),
+                                       'total_loss': loss.data.item()},
+                                      step)
             # 加入总loss
             train_loss.append(loss.detach().cpu())
             loss_temp_cls += cls_loss.detach().cpu().numpy()

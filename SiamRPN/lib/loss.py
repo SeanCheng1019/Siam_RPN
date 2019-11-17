@@ -127,4 +127,4 @@ def rpn_smoothL1(input, target, label, num_pos, ohem=None):
                 loss = t.FloatTensor([0]).cuda()[0]
             loss_all.append(loss.mean())
     final_loss = t.stack(loss_all).mean()
-    return final_loss.normal_()
+    return final_loss
