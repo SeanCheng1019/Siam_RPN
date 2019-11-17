@@ -27,7 +27,7 @@ class GetDataSet(Dataset):
             Config.pairs_per_sequence_per_epoch * len(sequence_names)
         for track_sequence_name in self.meta_data.keys():
             track_sequence_info = self.meta_data[track_sequence_name]
-            for object_id in track_sequence_info.keys():
+            for object_id in list(track_sequence_info.keys()):
                 if len(track_sequence_info[object_id]) < 2:
                     del track_sequence_info[object_id]
         self.training = training
@@ -55,11 +55,14 @@ class GetDataSet(Dataset):
             exemplar_index = np.random.choice(list(range(len(trk_frames))))
             exemplar_whole_path_name = glob(os.path.join(self.data_dir, sequence, trk_frames[exemplar_index] +
                                                          ".{:02d}.patch*.jpg".format(trkid)))[0]
-            exemplar_gt_w, exemplar_gt_h, exemplar_img_w, exemplar_img_h = \
-                float(exemplar_whole_path_name.split('/')[-1].split('_')[2]), float(
-                    exemplar_whole_path_name.split('/')[-1].split('_')[4][1:])
-            float(exemplar_whole_path_name.split('/')[-1].split('_')[7]), float(
-                exemplar_whole_path_name.split('/')[-1].split('_')[-1][:-4])
+            exemplar_gt_w, exemplar_gt_h, exemplar_img_w, exemplar_img_h = float(
+                exemplar_whole_path_name.split('/')[-1].split('_')[2]), \
+                                                                           float(exemplar_whole_path_name.split('/')[
+                                                                                     -1].split('_')[4][1:]), \
+                                                                           float(exemplar_whole_path_name.split('/')[
+                                                                                     -1].split('_')[7]), \
+                                                                           float(exemplar_whole_path_name.split('/')[
+                                                                                     -1].split('_')[-1][:-4])
             exemplar_ratio = min(exemplar_gt_h / exemplar_gt_w, exemplar_gt_w / exemplar_gt_h)
             exemplar_scale = exemplar_gt_w * exemplar_gt_h / (exemplar_img_w * exemplar_img_h)
             # 为了过滤掉一些特殊的案例
@@ -77,15 +80,14 @@ class GetDataSet(Dataset):
             # 这里加入一个采样权重来达到这样的目的。
             weights = self.sample_weights(exemplar_index, low_idx, high_idx, Config.sample_type)
             instance_file_name = np.random.choice(trk_frames[low_idx:exemplar_index]
-                                                  + trk_frames[exemplar_index:high_idx], p=weights)
+                                                  + trk_frames[exemplar_index + 1:high_idx], p=weights)
             instance_whole_path_name = glob(os.path.join(self.data_dir, sequence, instance_file_name +
                                                          ".{:02d}.patch*.jpg".format(trkid)))[0]
             # 和之前选exemplar的操作一样 （**之后可以考虑这部分重复的代码封装在util的方法里**）
-            instance_gt_w, instance_gt_h, instance_img_w, instance_img_h = \
-                float(instance_whole_path_name.split('/')[-1].split('_')[2]), float(
-                    instance_whole_path_name.split('/')[-1].split('_')[4][1:])
-            float(instance_whole_path_name.split('/')[-1].split('_')[7]), float(
-                instance_whole_path_name.split('/')[-1].split('_')[-1][:-4])
+            instance_gt_w, instance_gt_h, instance_img_w, instance_img_h = float(instance_whole_path_name.split('/')[-1].split('_')[2]), \
+                                                                           float(instance_whole_path_name.split('/')[-1].split('_')[4][1:]),\
+                                                                           float(instance_whole_path_name.split('/')[-1].split('_')[7]), \
+                                                                           float(instance_whole_path_name.split('/')[-1].split('_')[-1][:-4])
             instance_ratio = min(instance_gt_h / instance_gt_w, instance_gt_w / instance_gt_h)
             instance_scale = instance_gt_w * instance_gt_h / (instance_img_w * instance_img_h)
             # 为了过滤掉一些特殊的案例
@@ -114,11 +116,12 @@ class GetDataSet(Dataset):
             img_h, img_w, _ = instance_img.shape
             cx_origin, cy_origin = (img_w - 1) / 2, (img_h - 1) / 2
             # 加中心偏移，减轻只在中心找目标的趋势
-            cx_add_shift, cy_add_shift = cx_origin + np.random.randint(-self.max_shift, self.max_shift)
+            cx_add_shift, cy_add_shift = cx_origin + np.random.randint(-self.max_shift, self.max_shift),\
+                                         cy_origin + np.random.randint(-self.max_shift, self.max_shift)
             instance_img, scale = crop_and_pad(instance_img, cx_add_shift, cy_add_shift,
                                                self.random_crop_size, self.random_crop_size)
             # x和y的相对位置，相对于中心点的
-            instance_gt_shift_cx, instance_gt_shift_cy = cx_origin - cx_add_shift,  cy_origin - cy_add_shift
+            instance_gt_shift_cx, instance_gt_shift_cy = cx_origin - cx_add_shift, cy_origin - cy_add_shift
             exemplar_img, instance_img = self.z_transforms(exemplar_img), self.x_transforms(instance_img)
             # 训练时，将回归分支锚框和gt的差返回，将分类分支锚框label返回
             # 这里的cx，cy，以及训练时预测的cx，cy都是相对位置，相对于中心点的
@@ -154,7 +157,7 @@ class GetDataSet(Dataset):
         random_scale_w = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
         h, w = origin_img.shape[:2]
         shape = int(w * random_scale_w), int(h * random_scale_h)
-        scaled_w, scaled_h = int(shape[0] / w), int(shape[1] / h)
+        scaled_w, scaled_h = shape[0] / w, shape[1] / h
         gt_w = scaled_w * gt_w
         gt_h = scaled_h * gt_h
         return cv2.resize(origin_img, shape, cv2.INTER_LINEAR), gt_w, gt_h
@@ -162,7 +165,7 @@ class GetDataSet(Dataset):
     def compute_target(self, anchors, box):
         """
         :param box: 这里box的cx，cy是相对于中心点的相对位置
-        :return:
+        :return: regression_target 4位偏移量 ， cls_label_map 1位标签0或1
         """
         regression_target = box_delta_in_gt_anchor(anchors, box)
         anchors_iou = compute_iou(anchors, box)
@@ -174,4 +177,4 @@ class GetDataSet(Dataset):
         return regression_target, cls_label_map
 
     def __len__(self):
-        return len(self.num)
+        return self.num

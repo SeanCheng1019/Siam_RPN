@@ -30,7 +30,7 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
     :return:
     '''
     loss_all = []
-    for batch_id in range(target[0]):
+    for batch_id in range(target.shape[0]):
         pos_index = np.where(target[batch_id].cpu() == 1)[0]  # type: ndarray
         neg_index = np.where(target[batch_id].cpu() == 0)[0]
         # 正样本数不一定有num_pos规定的这么多 所以要先看实际情况的正样本有多少
@@ -41,7 +41,7 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
             if len(pos_index) > 0:
                 # 先对所有都做交叉熵损失
                 pos_loss_temp = F.cross_entropy(input=input[batch_id][pos_index.tolist()],
-                                                target=target[batch_id][pos_index.tolist()], reduction='none')
+                                                target=target[batch_id][pos_index.tolist()].squeeze(), reduction='none')
                 # 用nms去除非极大值的框
                 selected_pos_index = nms(anchors[pos_index.tolist()],
                                          pos_loss_temp.cpu().detach().numpy(), min_pos)
@@ -52,20 +52,29 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
             # 随机选出min_pos个数的正样本
             if len(pos_index) > 0:
                 pos_index_random = random.sample(pos_index.tolist(), min_pos)
-                pos_loss_final = F.cross_entropy(input=input[batch_id][pos_index_random],
-                                                 target=target[batch_id][pos_index_random], reduction='none')
+               # print("处理loss \n", pos_index_random, input[batch_id][pos_index_random].shape,
+               #       target[batch_id][pos_index_random].squeeze().shape, target[batch_id][pos_index_random].squeeze(), "\n")
+                # 为了处理cross_entropy的维度问题
+                if len(pos_index_random) == 1:
+                    #print("处理1个的情况")
+                    pos_loss_final = F.cross_entropy(input=input[batch_id][pos_index_random],
+                                                target=target[batch_id][pos_index_random[0]], reduction='none')
+                else:
+                    pos_loss_final = F.cross_entropy(input=input[batch_id][pos_index_random],
+                                                     target=target[batch_id][pos_index_random].squeeze(),
+                                                     reduction='none')
             else:
                 pos_loss_final = t.FloatTensor([0]).cuda()
         if ohem_neg:
             if len(pos_index) > 0:
                 neg_loss_temp = F.cross_entropy(input=input[batch_id][neg_index.tolist()],
-                                                target=target[batch_id][neg_index.tolist()], reduction='none')
+                                                target=target[batch_id][neg_index.tolist()].squeeze(), reduction='none')
                 selected_neg_index = nms(anchors[neg_index], neg_loss_temp.cpu().detach().numpy(), min_neg)
                 neg_loss_final = neg_loss_temp[selected_neg_index]
             else:
                 # 只有负样本
                 neg_loss_temp = F.cross_entropy(input=input[batch_id][neg_index.tolist()],
-                                                target=target[batch_id][neg_index.tolsit()], reduction='none')
+                                                target=target[batch_id][neg_index.tolsit()].squeeze(), reduction='none')
                 selected_neg_index = nms(anchors[neg_index], neg_loss_temp.cpu().detach().numpy(), num_neg)
                 neg_loss_final = neg_loss_temp[selected_neg_index]
         else:
@@ -74,13 +83,13 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
                 neg_index_random = random.sample(neg_index.tolist(), min_neg)
                 neg_loss_final = F.cross_entropy(input=input[batch_id][neg_index_random],
 
-                                                 target=target[batch_id][neg_index_random], reduction='none')
+                                                 target=target[batch_id][neg_index_random].squeeze(), reduction='none')
             # 对所有的负样本进行损失计算
             else:
                 # 全部是负样本
                 neg_index_random = random.sample(neg_index.tolist(), num_neg)
                 neg_loss_final = F.cross_entropy(input=input[batch_id][neg_index_random],
-                                                 target=target[batch_id][neg_index_random], reduction='none')
+                                                 target=target[batch_id][neg_index_random].squeeze(), reduction='none')
         loss = (pos_loss_final.mean() + neg_loss_final.mean()) / 2
         loss_all.append(loss)
     final_loss = t.stack(loss_all).mean()
@@ -96,13 +105,13 @@ def rpn_smoothL1(input, target, label, num_pos, ohem=None):
     loss_all = []
     for batch_id in range(target.shape[0]):
         # 只对正样本进行回归
-        pos_index = np.where(target[batch_id].cpu() == 1)[0]
+        pos_index = np.where(label[batch_id].cpu() == 1)[0]
         min_pos = min(len(pos_index), num_pos)
         if ohem:
             if len(pos_index) > 0:
                 # loss的维度是？
                 loss = F.smooth_l1_loss(input=input[batch_id][pos_index],
-                                        target=target[batch_id][pos_index], reduction='none')
+                                        target=target[batch_id][pos_index].squeeze(), reduction='none')
                 sort_index = t.argsort(loss.mean(1))
                 loss_ohem = loss[sort_index[-num_pos:]]
             else:
@@ -118,4 +127,4 @@ def rpn_smoothL1(input, target, label, num_pos, ohem=None):
                 loss = t.FloatTensor([0]).cuda()[0]
             loss_all.append(loss.mean())
     final_loss = t.stack(loss_all).mean()
-    return final_loss
+    return final_loss.normal_()

@@ -6,9 +6,11 @@ import numpy as np
 
 class visual:
     def __init__(self, port=8097):
-        self.vis = visdom.Visdom(port=port)
+        self.vis = visdom.Visdom(server='http://127.0.0.1', port=8097)
+        assert self.vis.check_connection()
         self.counter = 0
 
+
     def plot_img(self, img, win=1, name='img'):
-        self.vis.image(img, win=win, opts={'title': name})
+        self.vis.image(img.astype('uint8'), win=win, opts={'title': name})
 

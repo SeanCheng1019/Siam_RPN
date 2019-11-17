@@ -17,6 +17,7 @@ from lib.dataset import GetDataSet
 from lib.loss import rpn_cross_entropy_banlance, rpn_smoothL1
 from lib.util import ajust_learning_rate, get_topK_box, add_box_img, compute_iou, box_transform_use_reg_offset
 from net.net_siamrpn import SiameseAlexNet
+from lib.viusal import visual
 import pickle
 
 
@@ -63,12 +64,12 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
     summary_writer = SummaryWriter(Config.log_dir)
     # 可视化
     if vis_port:
-        vis = vis_port(port=vis_port)
+        vis = visual()
     # start training
     model = SiameseAlexNet()
     model = model.cuda()
-    optimizer = t.optim.SGD(model.parameters, lr=Config.lr, momentum=Config.momentum,
-                            wehight_decay=Config.weight_dacay)
+    optimizer = t.optim.SGD(model.parameters(), lr=Config.lr, momentum=Config.momentum,
+                            weight_decay=Config.weight_dacay)
     start_epoch = 1
     # load model weight
     if model_path and init:  # 需要初始化以及存在训练模型时
@@ -77,7 +78,8 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
         # 这里load的是整个模型，包括网络、优化方法等等
         checkpoint = t.load(model_path)
         if 'model' in checkpoint.keys():
-            # 这里加载的是网络的
+            # 这里加载的是网络的pred_cls_score
+            # 这里加载的是网络的pred_cls_score
             model.load_state_dict(checkpoint['model'])
         # 换个方式加载
         else:
@@ -124,11 +126,12 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                 continue
             else:
                 raise KeyError("something wrong in fixing 3 layers \n")
-            print("fixed layers: " + model.sharedFeatExtra[:10])
+            print("fixed layers:  \n", layer)
 
     if t.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     for epoch in range(start_epoch, Config.epoch + 1):
+        print("staring epoch{} \n".format(epoch))
         train_loss = []
         model.train()  # 设置为训练模式 train=True
         if Config.fix_former_3_layers:
@@ -140,9 +143,12 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
         loss_temp_cls = 0
         loss_temp_reg = 0
         for i, data in enumerate(tqdm(trainloader)):
+            # 每次加载一个mini-batch数量的样本
+            # exemplar_imgs size:[32,127,127,3]  regression_target size:[32,1805,4)
             exemplar_imgs, instance_imgs, regression_target, cls_label_map = data
             regression_target, cls_label_map = regression_target.cuda(), cls_label_map.cuda()
-            pred_cls_score, pred_regression = model(exemplar_imgs.cuda(), instance_imgs.cuda())
+            pred_cls_score, pred_regression = model(exemplar_imgs.permute(0, 3, 1, 2).cuda(),
+                                                    instance_imgs.permute(0, 3, 1, 2).cuda())
             pred_cls_score = pred_cls_score.reshape(-1, 2,
                                                     Config.anchor_num *
                                                     Config.score_map_size *
@@ -170,26 +176,65 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             train_loss.append(loss.detach().cpu())
             loss_temp_cls += cls_loss.detach().cpu().numpy()
             loss_temp_reg += reg_loss.detach().cpu().numpy()
+
+            # if vis_port:
+            #     anchors_show = train_dataset.anchors
+            #     exem_img = exemplar_imgs[0].cpu().numpy()
+            #     inst_img = instance_imgs[0].cpu().numpy()
+            #     topk = Config.show_topK
+            #     vis.plot_img(exem_img.transpose(2, 0, 1), win=1, name='exemplar_img')
+            #     cls_pred = cls_label_map[0]  # 对这个存疑,看看cls_pred的内容
+            #     gt_box = get_topK_box(cls_pred, regression_target[0], anchors_show)[0]
+            #     # show gt box
+            #     img_box = add_box_img(inst_img, gt_box, color=(255, 0, 0))
+            #     vis.plot_img(img_box.transpose(2, 0, 1), win=2, name='instance_img')
+            #     # show anchor with max score
+            #     cls_pred = F.softmax(pred_cls_score, dim=2)[0, :, 1]  # 1 的意思是最后一维，第一个代表的是正样本结果
+            #     scores, index = t.topk(cls_pred, k=topk)
+            #     img_box = add_box_img(inst_img, anchors_show[index.cpu()])
+            #     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
+            #     vis.plot_img(img_box.transpose(2, 0, 1), win=3, name='max_score_anchors')
+            #
+            #     cls_pred = F.softmax(pred_cls_score, dim=2)[0, :, 1]
+            #     topk_box = get_topK_box(cls_pred, pred_regression[0], anchors_show, topk=topk)
+            #     img_box = add_box_img(inst_img, topk_box.squeeze())
+            #     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
+            #     vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_score_box')
+            #     # show anchor with max iou
+            #     iou = compute_iou(anchors_show, gt_box).flatten()
+            #     index = np.argsort(iou)[-topk:]
+            #     img_box = add_box_img(inst_img, anchors_show[index])
+            #     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
+            #     vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_iou_anchor')
+            #     # show detected box with max iou
+            #     reg_offset = pred_regression[0].cpu().detach().numpy()
+            #     topk_offset = reg_offset[index, :]
+            #     anchors_det = anchors_show[index, :]
+            #     pred_box = box_transform_use_reg_offset(anchors_det, topk_offset)
+            #     img_box = add_box_img(inst_img, pred_box.squeeze())
+            #     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
+            #     vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_iou_box')
+
             if (i + 1) % Config.show_interval == 0:
                 tqdm.write("[epoch %2d][iter %4d] cls_loss: %.4f, reg_loss: %.4f, lr: %.2e"
                            % (epoch, i, loss_temp_cls / Config.show_interval,
-                              loss_temp_reg / Config.show_interval, optimizer.param_group[0]['lr']))
+                              loss_temp_reg / Config.show_interval, optimizer.param_groups[0]['lr']))
                 loss_temp_cls = 0
                 loss_temp_reg = 0
                 # 可视化
                 if vis_port:
                     anchors_show = train_dataset.anchors
-                    exem_img = exemplar_imgs[0].cpu().numpy().transpose(1, 2, 0)
-                    inst_img = instance_imgs[0].cpu().numpy().transpose(1, 2, 0)
+                    exem_img = exemplar_imgs[0].cpu().numpy()
+                    inst_img = instance_imgs[0].cpu().numpy()
                     topk = Config.show_topK
                     vis.plot_img(exem_img.transpose(2, 0, 1), win=1, name='exemplar_img')
                     cls_pred = cls_label_map[0]  # 对这个存疑,看看cls_pred的内容
                     gt_box = get_topK_box(cls_pred, regression_target[0], anchors_show)[0]
                     # show gt box
-                    img_box = add_box_img(inst_img, gt_box, color=[255, 0, 0])
+                    img_box = add_box_img(inst_img, gt_box, color=(255, 0, 0))
                     vis.plot_img(img_box.transpose(2, 0, 1), win=2, name='instance_img')
                     # show anchor with max score
-                    cls_pred = F.softmax(pred_cls_score, dim=2)[0, :, 1]
+                    cls_pred = F.softmax(pred_cls_score, dim=2)[0, :, 1]  # 1 的意思是最后一维，第一个代表的是正样本结果
                     scores, index = t.topk(cls_pred, k=topk)
                     img_box = add_box_img(inst_img, anchors_show[index.cpu()])
                     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
@@ -197,7 +242,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
 
                     cls_pred = F.softmax(pred_cls_score, dim=2)[0, :, 1]
                     topk_box = get_topK_box(cls_pred, pred_regression[0], anchors_show, topk=topk)
-                    img_box = add_box_img(inst_img, topk_box)
+                    img_box = add_box_img(inst_img, topk_box.squeeze())
                     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
                     vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_score_box')
                     # show anchor with max iou
@@ -205,15 +250,15 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                     index = np.argsort(iou)[-topk:]
                     img_box = add_box_img(inst_img, anchors_show[index])
                     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
-                    vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_iou_anchor')
+                    vis.plot_img(img_box.transpose(2, 0, 1), win=5, name='max_iou_anchor')
                     # show detected box with max iou
                     reg_offset = pred_regression[0].cpu().detach().numpy()
                     topk_offset = reg_offset[index, :]
                     anchors_det = anchors_show[index, :]
                     pred_box = box_transform_use_reg_offset(anchors_det, topk_offset)
-                    img_box = add_box_img(inst_img, pred_box)
+                    img_box = add_box_img(inst_img, pred_box.squeeze())
                     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
-                    vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_iou_box')
+                    vis.plot_img(img_box.transpose(2, 0, 1), win=6, name='max_iou_box')
 
         train_loss = np.mean(train_loss)
 
@@ -223,7 +268,8 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
         for i, data in enumerate(tqdm(validloader)):
             exemplar_imgs, instance_imgs, regression_target, cls_label_map = data
             regression_target, cls_label_map = regression_target.cuda(), cls_label_map.cuda()
-            pred_regression, pred_cls_score = model(exemplar_imgs.cuda(), instance_imgs.cuda())
+            pred_cls_score, pred_regression = model(exemplar_imgs.permute(0, 3, 1, 2).cuda(),
+                                                    instance_imgs.permute(0, 3, 1, 2).cuda())
             pred_cls_score = pred_cls_score.reshape(-1, 2,
                                                     Config.anchor_num *
                                                     Config.score_map_size *
@@ -234,7 +280,9 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             cls_loss = rpn_cross_entropy_banlance(pred_cls_score, cls_label_map, Config.num_pos,
                                                   Config.num_neg, anchors, ohem_pos=Config.ohem_pos,
                                                   ohem_neg=Config.ohem_neg)
-            loss = pred_regression + Config.lamb * cls_loss
+            reg_loss = rpn_smoothL1(pred_regression, regression_target, cls_label_map,
+                                    Config.num_pos, Config.ohem_reg)
+            loss = cls_loss + Config.lamb * reg_loss
             valid_loss.append(loss.detach().cpu())
         valid_loss = np.mean(valid_loss)
         print("[EPOCH %2d] valid_loss: %.4f, train_loss: %.4f" % (epoch, valid_loss, train_loss))
@@ -243,9 +291,9 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
         ajust_learning_rate(optimizer, Config.gamma)
         # save model
         if epoch % Config.save_interval == 0:
-            if not os.path.exists('./data/models/'):
-                os.mkdir('./data/models/')
-            save_name = './data/models/siamrpn_epoch_{}.pth'.format(epoch)
+            if not os.path.exists('../data/models/'):
+                os.mkdir('../data/models/')
+            save_name = '../data/models/siamrpn_epoch_{}.pth'.format(epoch)
             if t.cuda.device_count() > 1:
                 new_state_dict = OrderedDict()
                 for k, v in model.state_dict().items():
@@ -257,3 +305,16 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                 'optimizer': optimizer.state_dict(),
             }, save_name)
             print('save model as:{}'.format(save_name))
+
+
+if __name__ == '__main__':
+    data_dir = "/home/csy/dataset/dataset/ILSVRC2015_VID_curation2"
+    model_path = None
+    vis_port = 8097
+    init = None
+    train(data_dir, model_path, vis_port, init)
+
+    """
+    /media/csy/62ac73e0-814c-4dba-b59d-676690aca14b/PycharmProjects/Siam_RPN/SiamRPN/lib/loss.py:125: UserWarning: Using a target size (torch.Size([4])) that is different to the input size (torch.Size([1, 4])). This will likely lead to incorrect results due to broadcasting. Please ensure they have the same size.
+  target=target[batch_id][pos_index].squeeze())
+    """

@@ -131,7 +131,7 @@ def box_transform_use_reg_offset(anchors, offsets):
     box_cy = anchor_h * offsets_y + anchor_cy
     box_w = anchor_w * np.exp(offsets_w)
     box_h = anchor_h * np.exp(offsets_h)
-    boxes = np.stack([box_cx, box_cy, box_w, box_h])
+    boxes = np.stack([box_cx, box_cy, box_w, box_h], axis=2)
     return boxes
 
 
@@ -162,7 +162,7 @@ def compute_iou(anchors, box):
     overlap_y1 = np.max([anchor_y1, gt_y1], axis=0)
     overlap_y2 = np.min([anchor_y2, gt_y2], axis=0)
     # 要注意到没有交集的情况，x2-x1就会出现负数，就没有意义，所以要限制最小是0
-    overlap_area = np.max([(overlap_x2 - overlap_x1), np.zeros(overlap_x1)], axis=0) \
+    overlap_area = np.max([(overlap_x2 - overlap_x1), np.zeros(overlap_x1.shape)], axis=0) \
                    * np.max([(overlap_y2 - overlap_y1), np.zeros(overlap_x1.shape)], axis=0)
     anchor_area = (anchor_x2 - anchor_x1) * (anchor_y2 - anchor_y1)
     gt_area = (gt_x2 - gt_x1) * (gt_y2 - gt_y1)
@@ -195,7 +195,7 @@ def ajust_learning_rate(optimizer, decay=0.1):
 
 def generate_anchors(total_stride, base_size, scales, ratios, score_map_size):
     anchor_num = len(scales) * len(ratios)  # 每个位置的锚框数量
-    anchor = np.zero((anchor_num, 4), dtype=np.float32)
+    anchor = np.zeros((anchor_num, 4), dtype=np.float32)
     size = np.square(base_size)
     count = 0
     '''
@@ -223,9 +223,9 @@ def generate_anchors(total_stride, base_size, scales, ratios, score_map_size):
     return anchor
 
 
-def get_topK_box(cls_score, pred_regression, anchors, topk=10):
+def get_topK_box(cls_score, pred_regression, anchors, topk=2):
     reg_offset = pred_regression.cpu().detach().numpy()
-    scores, index = t.topk(cls_score, topk)
+    scores, index = t.topk(cls_score, topk, dim=0)
     index = index.view(-1).cpu().detach().numpy()  # debug时候看下数据转换
     topk_offset = reg_offset[index, :]
     anchors = anchors[index, :]
@@ -249,7 +249,7 @@ def add_box_img(img, boxes, color=(0, 255, 0)):
         left_top_corner = [img_cx + box[0] - box[2] / 2 + 0.5, img_cy + box[1] - box[3] / 2 + 0.5]
         right_bottom_corner = [img_cx + box[0] + box[2] / 2 - 0.5, img_cy + box[1] + box[3] / 2 - 0.5]
         left_top_corner[0] = np.clip(left_top_corner[0], 0, img.shape[1])
-        right_bottom_corner[0] = np.clip(right_bottom_corner, 0, img.shape[1])
+        right_bottom_corner[0] = np.clip(right_bottom_corner[0], 0, img.shape[1])
         left_top_corner[1] = np.clip(left_top_corner[1], 0, img.shape[0])
         right_bottom_corner[1] = np.clip(right_bottom_corner[1], 0, img.shape[0])
         img = cv2.rectangle(img, (int(left_top_corner[0]), int(left_top_corner[1])),

@@ -30,7 +30,6 @@ class SiameseAlexNet(nn.Module):
         )
         self.anchor_num_per_position = Config.anchor_num
         self.input_size = Config.instance_size
-        #self.conv_displacement = int((self.input_size - Config.instance_size) / Config.total_stride)
         self.conv_cls1 = nn.Conv2d(256, 256 * 2 * self.anchor_num_per_position, 3)
         self.conv_cls2 = nn.Conv2d(256, 256, 3)
         self.conv_reg1 = nn.Conv2d(256, 256 * 4 * self.anchor_num_per_position, 3)
@@ -44,12 +43,12 @@ class SiameseAlexNet(nn.Module):
         kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
         conv_cls = self.conv_cls2(detection_feature)
         conv_reg = self.conv_reg2(detection_feature)
-
+        cls_map_size = list(conv_cls.shape)[-1]
+        conv_cls = conv_cls.reshape(1, -1, cls_map_size, cls_map_size)   # 改变形状，才能进行两者卷积
         kernel_cls = kernel_cls.reshape(-1, 256, 4, 4)
+        reg_map_size = list(conv_reg.shape)[-1]
+        conv_reg = conv_reg.reshape(1, -1, reg_map_size, reg_map_size)
         kernel_reg = kernel_reg.reshape(-1, 256, 4, 4)
-        #conv_cls = conv_cls.reshape(1, -1, self.conv_displacement + 4, self.conv_displacement + 4)
-        #conv_reg = conv_reg.reshape(1, -1, self.conv_displacement + 4, self.conv_displacement + 4)
-
         pred_cls = F.conv2d(conv_cls, kernel_cls, groups=N)
         pred_reg = F.conv2d(conv_reg, kernel_reg, groups=N)
         return pred_cls, pred_reg

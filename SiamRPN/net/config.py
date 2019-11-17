@@ -11,9 +11,9 @@ class Config:
     anchor_scales = np.array([8, ])
     anchor_ratio = np.array([0.33, 0.5, 1, 2, 3])
     scale_range = (0.001, 0.7)  # what's this
-    anchor_num = len(anchor_ratio) * len(anchor_ratio)
+    anchor_num = len(anchor_ratio) * len(anchor_scales)
     anchor_base_size = 8
-    score_map_size = (instance_size - exemplar_size) / total_stride + 1
+    score_map_size = (instance_size - exemplar_size) // total_stride + 1
     scale_range = (0.001, 0.7)
     ratio_range = (0.1, 10)
     frame_range = 100
@@ -28,7 +28,9 @@ class Config:
     valid_batch_size = 8
     train_num_workers = 4
     valid_num_workers = 4
-    log_dir = './data/logs'
+    log_dir = '../data/logs'
+    train_ratio = 0.99
+    seed = 6666
     start_lr = 3e-2
     end_lr = 1e-5
     epoch = 50
@@ -37,7 +39,7 @@ class Config:
             np.logspace(np.log10(start_lr), np.log10(end_lr), num=epoch)[0]
     momentum = 0.9
     weight_dacay = 0.0005  # weight decay of optimizator
-    pretrained_model = ' '
+    pretrained_model = "/media/csy/62ac73e0-814c-4dba-b59d-676690aca14b/PycharmProjects/Siam_RPN/SiamRPN/model/alexnet.pth"
     fix_former_3_layers = True
     num_pos = 16
     num_neg = 48
@@ -46,6 +48,6 @@ class Config:
     ohem_reg = False
     lamb = 5
     clip = 10
-    show_interval = 100
+    show_interval = 3
     save_interval = 1
     show_topK = 3
