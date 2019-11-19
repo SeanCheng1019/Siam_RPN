@@ -54,4 +54,27 @@ class SiameseAlexNet(nn.Module):
         return pred_cls, pred_reg
 
 
+    def track_init(self, template):
+        """
+        :param template:  输入第一帧图片，把固定的值先计算好并且缓存，作为卷积核固定
+        """
+        N = template.size[0]
+        template_feature = self.sharedFeatExtra(template)
+        kernel_cls = self.conv_cls1(template_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
+        kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
+        self.kernel_cls = kernel_cls.reshape(-1, 256, 4, 4)
+        self.kernel_reg = kernel_reg.reshape(-1, 256, 4, 4)
 
+
+    def tracking(self, detection):
+        N = detection.size(0)
+        detection_feature = self.sharedFeatExtra(detection)
+        conv_cls = self.conv_cls2(detection_feature)
+        conv_reg = self.conv_reg2(detection_feature)
+        cls_map_size = list(conv_cls.shape)[-1]
+        conv_cls = conv_cls.reshape(1, -1, cls_map_size, cls_map_size)  # 改变形状，才能进行两者卷积
+        reg_map_size = list(conv_reg.shape)[-1]
+        conv_reg = conv_reg.reshape(1, -1, reg_map_size, reg_map_size)
+        pred_cls = F.conv2d(conv_cls, self.kernel_cls, groups=N)
+        pred_reg = F.conv2d(conv_reg, self.kernel_reg, groups=N)
+        return pred_cls, pred_reg

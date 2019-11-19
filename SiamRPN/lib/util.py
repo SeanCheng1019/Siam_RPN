@@ -41,7 +41,7 @@ def get_instance_img(img, bbox, size_z, size_x, context_margin_amount, img_mean=
     return instance_img, w_instance, h_instance, scale_ratio_x
 
 
-def get_exemplar_img(img, bbox, size_z, size_x, context_margin_amount, img_mean=None):
+def get_exemplar_img(img, bbox, size_z, context_margin_amount, img_mean=None):
     cx, cy, w, h = bbox
     w_context = w + context_margin_amount * (w + h)
     h_context = h + context_margin_amount * (w + h)

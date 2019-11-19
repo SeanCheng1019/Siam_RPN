@@ -2,6 +2,7 @@ from torch.utils.data.dataset import Dataset
 import numpy as np
 from net.config import Config
 from lib.util import generate_anchors, crop_and_pad, box_delta_in_gt_anchor, compute_iou
+from lib.custom_transforms import RandomStretch
 from glob import glob
 import os
 import cv2
@@ -84,10 +85,14 @@ class GetDataSet(Dataset):
             instance_whole_path_name = glob(os.path.join(self.data_dir, sequence, instance_file_name +
                                                          ".{:02d}.patch*.jpg".format(trkid)))[0]
             # 和之前选exemplar的操作一样 （**之后可以考虑这部分重复的代码封装在util的方法里**）
-            instance_gt_w, instance_gt_h, instance_img_w, instance_img_h = float(instance_whole_path_name.split('/')[-1].split('_')[2]), \
-                                                                           float(instance_whole_path_name.split('/')[-1].split('_')[4][1:]),\
-                                                                           float(instance_whole_path_name.split('/')[-1].split('_')[7]), \
-                                                                           float(instance_whole_path_name.split('/')[-1].split('_')[-1][:-4])
+            instance_gt_w, instance_gt_h, instance_img_w, instance_img_h = float(
+                instance_whole_path_name.split('/')[-1].split('_')[2]), \
+                                                                           float(instance_whole_path_name.split('/')[
+                                                                                     -1].split('_')[4][1:]), \
+                                                                           float(instance_whole_path_name.split('/')[
+                                                                                     -1].split('_')[7]), \
+                                                                           float(instance_whole_path_name.split('/')[
+                                                                                     -1].split('_')[-1][:-4])
             instance_ratio = min(instance_gt_h / instance_gt_w, instance_gt_w / instance_gt_h)
             instance_scale = instance_gt_w * instance_gt_h / (instance_img_w * instance_img_h)
             # 为了过滤掉一些特殊的案例
@@ -105,7 +110,7 @@ class GetDataSet(Dataset):
                 instance_img = cv2.cvtColor(instance_img, cv2.COLOR_GRAY2RGB)
             if Config.exemplar_stretch:
                 # 再次缩放尺寸
-                exemplar_img, exemplar_gt_w, exemplar_gt_h = self.randomStretch(exemplar_img,
+                exemplar_img, exemplar_gt_w, exemplar_gt_h = self.randomStretch(exemplar_img, exemplar_gt_w,
                                                                                 exemplar_gt_h)
             # 若有放缩的操作后，要保证尺寸要回到规定的尺寸
             exemplar_img, _ = crop_and_pad(exemplar_img, (exemplar_img.shape[0] - 1) / 2,
@@ -116,7 +121,7 @@ class GetDataSet(Dataset):
             img_h, img_w, _ = instance_img.shape
             cx_origin, cy_origin = (img_w - 1) / 2, (img_h - 1) / 2
             # 加中心偏移，减轻只在中心找目标的趋势
-            cx_add_shift, cy_add_shift = cx_origin + np.random.randint(-self.max_shift, self.max_shift),\
+            cx_add_shift, cy_add_shift = cx_origin + np.random.randint(-self.max_shift, self.max_shift), \
                                          cy_origin + np.random.randint(-self.max_shift, self.max_shift)
             instance_img, scale = crop_and_pad(instance_img, cx_add_shift, cy_add_shift,
                                                self.random_crop_size, self.random_crop_size)
@@ -153,14 +158,13 @@ class GetDataSet(Dataset):
         return weights / sum(weights)
 
     def randomStretch(self, origin_img, gt_w, gt_h):
-        random_scale_h = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
-        random_scale_w = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
         h, w = origin_img.shape[:2]
-        shape = int(w * random_scale_w), int(h * random_scale_h)
-        scaled_w, scaled_h = shape[0] / w, shape[1] / h
-        gt_w = scaled_w * gt_w
-        gt_h = scaled_h * gt_h
-        return cv2.resize(origin_img, shape, cv2.INTER_LINEAR), gt_w, gt_h
+        origin_img = RandomStretch(origin_img)
+        scaled_h, scaled_w = origin_img.shape[:2]
+        scale_ratio_w, scale_ratio_h = scaled_w / w, scaled_h / h
+        gt_w = scale_ratio_w * gt_w
+        gt_h = scale_ratio_h * gt_h
+        return origin_img, gt_w, gt_h
 
     def compute_target(self, anchors, box):
         """
