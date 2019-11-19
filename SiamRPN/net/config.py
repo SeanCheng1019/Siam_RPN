@@ -54,3 +54,6 @@ class Config:
     show_topK = 3
     penalty_k = 0.22
     window_influence = 0.4
+    track_lr = 0.3
+    min_scale = 0.1
+    max_scale = 10

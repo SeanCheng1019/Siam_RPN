@@ -20,7 +20,10 @@ class SiamRPNTracker:
                                         base_size=Config.anchor_base_size,
                                         scales=Config.anchor_scales,
                                         ratios=Config.anchor_ratio,
-                                        score_map_size=Config.score_map_size)
+                                        score_map_size=valid_map_size)
+        hanning = np.hanning(valid_map_size)
+        window = np.outer(hanning, hanning)
+        self.window = np.tile(window.flatten(), Config.anchor_num)
 
     def init(self, frame, bbox):
         self.center_pos = np.array(  # cx,cy
@@ -71,17 +74,36 @@ class SiamRPNTracker:
             return np.sqrt(s)
 
         # 惩罚和加窗
-        s = max(overall_scale(pred_box[:, 2], pred_box[:, 3]) /
-                # 乘以scale_detection的原因：pred_box是放缩后的图上预测出的box，而target_sz_w/h是原图的尺寸，两者要同步尺寸
-                (overall_scale(self.target_sz_w * scale_detection, self.target_sz_h * scale_detection)))
-        r = max((self.target_sz_w / self.target_sz_h) / (pred_box[:, 2] / pred_box[:, 3]))
-        penalty = np.exp(-(r * s - 1) * Config.penalty_k)
-        pred_score = pred_score * penalty  #加惩罚
-        pred_score = pred_score * (1- Config.window_influence) + self.  # 加余弦窗
+        s = max_ratio(overall_scale(pred_box[:, 2], pred_box[:, 3]) /
+                      # 乘以scale_detection的原因：pred_box是放缩后的图上预测出的box，而target_sz_w/h是原图的尺寸，两者要同步尺寸
+                      (overall_scale(self.target_sz_w * scale_detection, self.target_sz_h * scale_detection)))
+        r = max_ratio((self.target_sz_w / self.target_sz_h) / (pred_box[:, 2] / pred_box[:, 3]))
+        penalty = np.exp(-(r * s - 1) * Config.penalty_k)  # 对大尺度的变化要惩罚，让其权重配小权重
+        pred_score = pred_score * penalty  # 加惩罚
+        pred_score = pred_score * (1 - Config.window_influence) + \
+                     self.window * Config.window_influence  # 加余弦窗
         highest_score_id = np.argmax(pred_score)
         target = pred_box[highest_score_id, :] / scale_detection  # 返回原图要用原来的尺寸
-        lr =
+        lr = penalty[highest_score_id] * pred_score[highest_score_id] * Config.track_lr
         # 预测的x，y都是相对于中心点的相对位移
-        new_x = np.clip(target[0] + self.center_pos[0], 0, frame.shape[1])
-        new_y = np.clip(target[1] + self.center_pos[1], 0, frame.shape[0])
-        new_w = np.clip(self.)
+        # clip boundary  （准备用一个clip函数统一处理来替代下面步骤）
+        # smooth bbox
+        res_x = np.clip(target[0] + self.center_pos[0], 0, frame.shape[1])
+        res_y = np.clip(target[1] + self.center_pos[1], 0, frame.shape[0])
+        res_w = np.clip(self.target_sz_w * (1 - lr) + target[2] * lr,
+                        Config.min_scale * self.origin_target_sz[0],
+                        Config.max_scale * self.origin_target_sz[0])
+        res_h = np.clip(self.target_sz_h * (1 - lr) + target[3] * lr,
+                        Config.min_scale * self.origin_target_sz[1],
+                        Config.max_scale * self.origin_target_sz[1])
+        # update state
+        self.center_pos = np.array([res_x, res_y])
+        self.target_sz = np.array([res_w, res_h])
+        bbox = np.array([res_x, res_y, res_w, res_h])
+        self.bbox = {
+            np.clip(bbox[0] - bbox[2] / 2, 0, frame.shape[1]).astype(np.float64),
+            np.clip(bbox[1] - bbox[3] / 2, 0, frame.shape[0]).astype(np.float64),
+            np.clip(bbox[2], 10, frame.shape[1]).astype(np.float64),
+            np.clip(bbox[3], 10, frame.shape[0]).astype(np.float64)
+        }
+        return self.bbox, pred_score[highest_score_id]
