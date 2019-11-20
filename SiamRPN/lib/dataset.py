@@ -3,6 +3,7 @@ import numpy as np
 from net.config import Config
 from lib.util import generate_anchors, crop_and_pad, box_delta_in_gt_anchor, compute_iou
 from lib.custom_transforms import RandomStretch
+from torchvision.transforms import transforms
 from glob import glob
 import os
 import cv2
@@ -39,11 +40,11 @@ class GetDataSet(Dataset):
         self.anchors = generate_anchors(Config.total_stride, Config.anchor_base_size, Config.anchor_scales,
                                         Config.anchor_ratio, Config.score_map_size)
 
-    def __getitem__(self, index):  # 何时调用的，何时传入的index参数
+    def __getitem__(self, idx):  # 何时调用的，何时传入的index参数
         all_idx = np.arange(self.num)
         np.random.shuffle(all_idx)
         # 先选一个序列，然后序列里选个目标，然后选择一帧。
-        for idx in all_idx:
+        for index in all_idx:
             index = index % len(self.sequence_names)
             sequence = self.sequence_names[index]
             trajs = self.meta_data[sequence]
@@ -159,7 +160,10 @@ class GetDataSet(Dataset):
 
     def randomStretch(self, origin_img, gt_w, gt_h):
         h, w = origin_img.shape[:2]
-        origin_img = RandomStretch(origin_img)
+        transform = transforms.Compose([
+            RandomStretch()
+        ])
+        origin_img = transform(origin_img)
         scaled_h, scaled_w = origin_img.shape[:2]
         scale_ratio_w, scale_ratio_h = scaled_w / w, scaled_h / h
         gt_w = scale_ratio_w * gt_w

@@ -314,7 +314,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
 if __name__ == '__main__':
     data_dir = "/home/csy/dataset/dataset/ILSVRC2015_VID_curation2"
     model_path = None
-    vis_port = 8097
+    vis_port = None
     init = None
     train(data_dir, model_path, vis_port, init)
 
