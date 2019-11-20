@@ -26,7 +26,6 @@ def process_single_document_data(sequence_dir, output_dir):
     trajs = {}
 
     for image_name in image_names:
-
         img = cv2.imread(image_name)
         img_weight, img_height, _ = img.shape
         # R，G，B 通道的平均像素值
