@@ -2,6 +2,7 @@ import numpy as np
 from torch import nn
 from net.config import Config
 import torch.nn.functional as F
+
 class SiameseAlexNet(nn.Module):
     def __init__(self, ):
         super(SiameseAlexNet, self).__init__()

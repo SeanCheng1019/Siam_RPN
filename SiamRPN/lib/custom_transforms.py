@@ -6,14 +6,14 @@ from torchvision.transforms import RandomCrop
 
 
 class RandomStretch:
-    def __init__(self, max_stretch=0.15):
+    def __init__(self):
         self.max_stretch = Config.scale_resize
 
     def __call__(self, img):
         random_scaled_h = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
         random_scaled_w = 1.0 + np.random.uniform(-self.max_stretch, self.max_stretch)
         img_h, img_w, _ = img.shape
-        new_shape = img_h * random_scaled_h, img_w * random_scaled_w
+        new_shape = int(img_h * random_scaled_h), int(img_w * random_scaled_w)
         return cv2.resize(img, new_shape, cv2.INTER_LINEAR)
 
 

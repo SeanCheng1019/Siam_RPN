@@ -29,4 +29,3 @@ class VOTVideo(Video):
         self.tags['motion_change'] = motion_change
         self.tags['size_change'] = size_change
         self.tags['occlusion'] = occlusion
-        
