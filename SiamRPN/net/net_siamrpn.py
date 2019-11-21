@@ -2,6 +2,9 @@ import numpy as np
 from torch import nn
 from net.config import Config
 import torch.nn.functional as F
+from net.config import Config
+from lib.viusal import visual
+from lib.util import norm_to_255
 
 class SiameseAlexNet(nn.Module):
     def __init__(self, ):
@@ -29,6 +32,7 @@ class SiameseAlexNet(nn.Module):
             nn.Conv2d(384, 256, 3),
             nn.BatchNorm2d(256),
         )
+
         self.anchor_num_per_position = Config.anchor_num
         self.input_size = Config.instance_size
         self.conv_cls1 = nn.Conv2d(256, 256 * 2 * self.anchor_num_per_position, 3)
@@ -40,6 +44,12 @@ class SiameseAlexNet(nn.Module):
         N = template.size(0)
         template_feature = self.sharedFeatExtra(template)
         detection_feature = self.sharedFeatExtra(detection)
+        # if Config.show_net_feature:
+        #     vis = visual()
+        #     detection_feature_ = norm_to_255(detection_feature[0].cpu().detach().numpy())
+            # vis.plot_imgs(detection_feature_[:, None, :, :],
+            #              win=7, name='detection_feature')
+            # vis.plot_img(detection_feature_[0:3, :, :], win=7, name='feature')
         kernel_cls = self.conv_cls1(template_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
         kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
         conv_cls = self.conv_cls2(detection_feature)

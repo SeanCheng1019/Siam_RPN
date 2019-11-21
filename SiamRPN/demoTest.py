@@ -1,11 +1,18 @@
-from net.net_siamrpn import SiameseAlexNet
-import numpy as np
-import torch as t
-net = SiameseAlexNet()
-# input_template = t.from_numpy(np.random.random(size=(1, 3, 127, 127)) * 255).float()
-# input_detection = t.from_numpy(np.random.random(size=(1, 3, 271, 271)) * 255).float()
-#
-# cls_score, reg_score = net(input_template, input_detection)
-# print(cls_score, reg_score)
-for k,v in net.state_dict().items():
-    print(k)
+
+# for x in positive_anchor_pos:
+#     res = response[x:x + 1, :, :].cpu().detach().numpy()
+#     res_show.append(res)
+
+from PIL import Image
+import math
+img1 = Image.open('/home/csy/Pictures/img.jpg')#图片1
+img2 = Image.open('/home/csy/Pictures/res4.jpg')#图片2
+w = img1.size[0]
+h = img1.size[1]
+img2 = img2.resize((w,h))
+img1 = img1.convert('RGBA')
+img2 = img2.convert('RGBA')
+img = Image.blend(img2, img1, 0.5)
+img.show()
+# img.save( "blend.png")
+

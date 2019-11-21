@@ -149,10 +149,12 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             regression_target, cls_label_map = regression_target.cuda(), cls_label_map.cuda()
             pred_cls_score, pred_regression = model(exemplar_imgs.permute(0, 3, 1, 2).cuda(),
                                                     instance_imgs.permute(0, 3, 1, 2).cuda())
+            cls_map_vis, regression_map_vis = pred_cls_score, pred_regression
             pred_cls_score = pred_cls_score.reshape(-1, 2,
                                                     Config.anchor_num *
                                                     Config.score_map_size *
                                                     Config.score_map_size).permute(0, 2, 1)
+
             pred_regression = pred_regression.reshape(-1, 4,
                                                       Config.anchor_num * Config.score_map_size *
                                                       Config.score_map_size).permute(0, 2, 1)
@@ -180,45 +182,6 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             train_loss.append(loss.detach().cpu())
             loss_temp_cls += cls_loss.detach().cpu().numpy()
             loss_temp_reg += reg_loss.detach().cpu().numpy()
-
-            # if vis_port:
-            #     anchors_show = train_dataset.anchors
-            #     exem_img = exemplar_imgs[0].cpu().numpy()
-            #     inst_img = instance_imgs[0].cpu().numpy()
-            #     topk = Config.show_topK
-            #     vis.plot_img(exem_img.transpose(2, 0, 1), win=1, name='exemplar_img')
-            #     cls_pred = cls_label_map[0]  # 对这个存疑,看看cls_pred的内容
-            #     gt_box = get_topK_box(cls_pred, regression_target[0], anchors_show)[0]
-            #     # show gt box
-            #     img_box = add_box_img(inst_img, gt_box, color=(255, 0, 0))
-            #     vis.plot_img(img_box.transpose(2, 0, 1), win=2, name='instance_img')
-            #     # show anchor with max score
-            #     cls_pred = F.softmax(pred_cls_score, dim=2)[0, :, 1]  # 1 的意思是最后一维，第一个代表的是正样本结果
-            #     scores, index = t.topk(cls_pred, k=topk)
-            #     img_box = add_box_img(inst_img, anchors_show[index.cpu()])
-            #     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
-            #     vis.plot_img(img_box.transpose(2, 0, 1), win=3, name='max_score_anchors')
-            #
-            #     cls_pred = F.softmax(pred_cls_score, dim=2)[0, :, 1]
-            #     topk_box = get_topK_box(cls_pred, pred_regression[0], anchors_show, topk=topk)
-            #     img_box = add_box_img(inst_img, topk_box.squeeze())
-            #     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
-            #     vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_score_box')
-            #     # show anchor with max iou
-            #     iou = compute_iou(anchors_show, gt_box).flatten()
-            #     index = np.argsort(iou)[-topk:]
-            #     img_box = add_box_img(inst_img, anchors_show[index])
-            #     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
-            #     vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_iou_anchor')
-            #     # show detected box with max iou
-            #     reg_offset = pred_regression[0].cpu().detach().numpy()
-            #     topk_offset = reg_offset[index, :]
-            #     anchors_det = anchors_show[index, :]
-            #     pred_box = box_transform_use_reg_offset(anchors_det, topk_offset)
-            #     img_box = add_box_img(inst_img, pred_box.squeeze())
-            #     img_box = add_box_img(img_box, gt_box, color=(255, 0, 0))
-            #     vis.plot_img(img_box.transpose(2, 0, 1), win=4, name='max_iou_box')
-
             if (i + 1) % Config.show_interval == 0:
                 tqdm.write("[epoch %2d][iter %4d] cls_loss: %.4f, reg_loss: %.4f, lr: %.2e"
                            % (epoch, i, loss_temp_cls / Config.show_interval,
@@ -230,6 +193,9 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                     anchors_show = train_dataset.anchors
                     exem_img = exemplar_imgs[0].cpu().numpy()
                     inst_img = instance_imgs[0].cpu().numpy()
+                    cls_map_vis = cls_map_vis.squeeze()[0:10, :, :]
+                    # choose odd layer
+
                     topk = Config.show_topK
                     vis.plot_img(exem_img.transpose(2, 0, 1), win=1, name='exemplar_img')
                     cls_pred = cls_label_map[0]  # 对这个存疑,看看cls_pred的内容
@@ -314,7 +280,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
 if __name__ == '__main__':
     data_dir = "/home/csy/dataset/dataset/ILSVRC2015_VID_curation2"
     model_path = None
-    vis_port = None
+    vis_port = 8097
     init = None
     train(data_dir, model_path, vis_port, init)
 

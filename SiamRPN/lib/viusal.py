@@ -14,3 +14,5 @@ class visual:
     def plot_img(self, img, win=1, name='img'):
         self.vis.image(img.astype('uint8'), win=win, opts={'title': name})
 
+    def plot_imgs(self, img, win=1, name='img'):
+        self.vis.images(img, win=win, opts={'title':'multi-channel features'})

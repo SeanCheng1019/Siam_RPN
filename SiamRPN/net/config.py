@@ -57,3 +57,4 @@ class Config:
     track_lr = 0.3
     min_scale = 0.1
     max_scale = 10
+    show_net_feature = True

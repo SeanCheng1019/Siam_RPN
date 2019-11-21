@@ -260,6 +260,12 @@ def get_topK_box(cls_score, pred_regression, anchors, topk=2):
     pred_box = box_transform_use_reg_offset(anchors, topk_offset)
     return pred_box
 
+def norm_to_255(feature):
+    max_ori = np.max(feature)
+    min_ori = np.min(feature)
+    feature = 0 + (255 - 0) / (max_ori - min_ori) * (feature - min_ori)
+    feature = feature.astype('uint8')
+    return feature
 
 def add_box_img(img, boxes, color=(0, 255, 0)):
     """
