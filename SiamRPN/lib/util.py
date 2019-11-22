@@ -141,6 +141,7 @@ def box_delta_in_gt_anchor(anchors, gt_box):
     delta_y = (gt_cy - anchor_cy) / anchor_h
     delta_w = np.log(gt_w / anchor_w)
     delta_h = np.log(gt_h / anchor_h)
+    # 返回原始锚框和gt_box的真正的"距离"，作为regression的GT
     regression_target = np.hstack((delta_x, delta_y, delta_w, delta_h))
     return regression_target
 
@@ -222,6 +223,9 @@ def ajust_learning_rate(optimizer, decay=0.1):
 
 
 def generate_anchors(total_stride, base_size, scales, ratios, score_map_size):
+    """
+        anchors: cx,cy,w,h  这里的cx cy 是相对于图片中心的相对位置
+    """
     anchor_num = len(scales) * len(ratios)  # 每个位置的锚框数量
     anchor = np.zeros((anchor_num, 4), dtype=np.float32)
     size = np.square(base_size)

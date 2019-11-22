@@ -16,3 +16,6 @@ class visual:
 
     def plot_imgs(self, img, win=1, name='img'):
         self.vis.images(img, win=win, opts={'title':'multi-channel features'})
+
+    def plot_heatmap(self,img, win=1, name='img'):
+        self.vis.heatmap(img, win=win)

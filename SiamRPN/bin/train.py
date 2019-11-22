@@ -175,9 +175,9 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             # summary_writer.add_scalar('train/cls_loss', cls_loss.data, step)
             # summary_writer.add_scalar('train/reg_loss', reg_loss.data, step)
             summary_writer.add_scalars('train',
-                                      {'cls_loss': cls_loss.data.item(), 'reg_loss': reg_loss.data.item(),
-                                       'total_loss': loss.data.item()},
-                                      step)
+                                       {'cls_loss': cls_loss.data.item(), 'reg_loss': reg_loss.data.item(),
+                                        'total_loss': loss.data.item()},
+                                       step)
             # 加入总loss
             train_loss.append(loss.detach().cpu())
             loss_temp_cls += cls_loss.detach().cpu().numpy()
@@ -193,9 +193,15 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                     anchors_show = train_dataset.anchors
                     exem_img = exemplar_imgs[0].cpu().numpy()
                     inst_img = instance_imgs[0].cpu().numpy()
-                    cls_map_vis = cls_map_vis.squeeze()[0:10, :, :]
+                    cls_response = cls_map_vis.squeeze()[0:10, :, :]
                     # choose odd layer
-
+                    cls_res_show = []
+                    for x in range(10):
+                        if x % 2 == 1:
+                            res = cls_response[x:x + 1, :, :].squeeze().cpu().detach().numpy()
+                            cls_res_show.append(res)
+                    for idex, heatmap in cls_res_show:
+                        vis.plot_heatmap(heatmap, win=index*10)
                     topk = Config.show_topK
                     vis.plot_img(exem_img.transpose(2, 0, 1), win=1, name='exemplar_img')
                     cls_pred = cls_label_map[0]  # 对这个存疑,看看cls_pred的内容

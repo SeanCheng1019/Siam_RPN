@@ -40,7 +40,6 @@ class GetDataSet(Dataset):
         self.anchors = generate_anchors(Config.total_stride, Config.anchor_base_size, Config.anchor_scales,
                                         Config.anchor_ratio, Config.score_map_size)
 
-
     def __getitem__(self, idx):  # 何时调用的，何时传入的index参数
         all_idx = np.arange(self.num)
         np.random.shuffle(all_idx)
@@ -118,6 +117,7 @@ class GetDataSet(Dataset):
             exemplar_img, _ = crop_and_pad(exemplar_img, (exemplar_img.shape[0] - 1) / 2,
                                            (exemplar_img.shape[1] - 1) / 2, self.center_crop_size,
                                            self.center_crop_size)
+            # 返回放缩后的图片，放缩后的目标宽高
             instance_img, instance_gt_w, instance_gt_h = self.randomStretch(instance_img, instance_gt_w,
                                                                             instance_gt_h)
             img_h, img_w, _ = instance_img.shape
@@ -175,6 +175,8 @@ class GetDataSet(Dataset):
         """
         :param box: 这里box的cx，cy是相对于中心点的相对位置
         :return: regression_target 4位偏移量 ， cls_label_map 1位标签0或1
+                regression_target 1805,4
+                cls_label_map 1805,1
         """
         regression_target = box_delta_in_gt_anchor(anchors, box)
         anchors_iou = compute_iou(anchors, box)
