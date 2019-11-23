@@ -7,7 +7,7 @@ class Config:
     instance_crop_size = 511
     context_margin_amount = 0.5
     total_stride = 8
-    valid_map_size = int(instance_size - exemplar_size) / total_stride + 1
+    valid_map_size = int((instance_size - exemplar_size) / total_stride) + 1
     pairs_per_sequence_per_epoch = 2
     anchor_scales = np.array([8, ])
     anchor_ratio = np.array([0.33, 0.5, 1, 2, 3])
@@ -47,7 +47,7 @@ class Config:
     ohem_pos = False
     ohem_neg = False
     ohem_reg = False
-    lamb = 5
+    lamb = 1
     clip = 10
     show_interval = 3
     save_interval = 1

@@ -38,16 +38,17 @@ class SiamRPNTracker(Tracker):
         self.window = np.tile(window.flatten(), Config.anchor_num)
 
     def init(self, frame, bbox):
-        self.center_pos = np.array(  # cx,cy
-            bbox[0] + bbox[2] / 2 - 0.5, bbox[1] + bbox[3] / 2 - 0.5
+        self.center_pos = np.array(  # cy,cx
+            [bbox[1] + bbox[3] / 2 - 0.5, bbox[0] + bbox[2] / 2 - 0.5]
         )
-        self.target_sz = np.array([bbox[2], bbox[3]])  # w,h
+        self.target_sz = np.array([bbox[3], bbox[2]])  # h,w
         self.target_sz_w, self.target_sz_h = bbox[2], bbox[3]
         self.origin_target_sz = self.target_sz.copy()
-        self.box = np.hstack(self.center_pos.copy(), self.target_sz.copy())  # cx, cy, w,h
+        self.box = np.hstack((self.center_pos.copy(), self.target_sz.copy()))  # cy, cx, h, w
         self.img_mean = np.mean(frame, axis=(0, 1))
-        exemplar_img, scale_ratio = get_exemplar_img(frame, self.box, Config.exemplar_size,
-                                                     Config.context_margin_amount, self.img_mean)
+        frame = np.array(frame)
+        exemplar_img, scale_ratio, _ = get_exemplar_img(frame, self.box, Config.exemplar_size,
+                                                        Config.context_margin_amount, self.img_mean)
         exemplar_img = self.transforms(exemplar_img)[None, :, :, :]
         self.model.track_init(exemplar_img.permute(0, 3, 1, 2).cuda())
 
@@ -56,6 +57,7 @@ class SiamRPNTracker(Tracker):
         :param frame: an numpy type image with 3 channel
         :return: bbox：[xmin, ymin, w, h]
         """
+        frame = np.array(frame)
         instance_img, _, _, scale_detection = get_instance_img(frame, self.box, Config.exemplar_size,
                                                                Config.instance_size, Config.context_margin_amount,
                                                                self.img_mean)
@@ -70,8 +72,8 @@ class SiamRPNTracker(Tracker):
                                                                                                                2,
                                                                                                                1)
         # 预测的dx,dy,dw,dh
-        delta = pred_reg.cpu().detach().numpy()
-        pred_box = box_transform_use_reg_offset(self.anchors, delta)
+        delta = pred_reg.cpu().detach().numpy().squeeze()
+        pred_box = box_transform_use_reg_offset(self.anchors, delta).squeeze()
         pred_score = F.softmax(pred_cls, dim=2)[0, :, 1].cpu().detach().numpy()  # softmax的含义
 
         # 以下内容在论文里4.3节中有解释
@@ -100,22 +102,24 @@ class SiamRPNTracker(Tracker):
         # 预测的x，y都是相对于中心点的相对位移
         # clip boundary  （准备用一个clip函数统一处理来替代下面步骤）
         # smooth bbox ，不是完全使用预测出来的新bbox，而是有个平滑的变化，类似于在之前长度上的一个增量。
-        res_x = np.clip(target[0] + self.center_pos[0], 0, frame.shape[1])
-        res_y = np.clip(target[1] + self.center_pos[1], 0, frame.shape[0])
-        res_w = np.clip(self.target_sz_w * (1 - lr) + target[2] * lr,
+        res_y = np.clip(target[0] + self.center_pos[0], 0, frame.shape[1])
+        res_x = np.clip(target[1] + self.center_pos[1], 0, frame.shape[0])
+        res_h = np.clip(self.target_sz_h * (1 - lr) + target[2] * lr,
                         Config.min_scale * self.origin_target_sz[0],
                         Config.max_scale * self.origin_target_sz[0])
-        res_h = np.clip(self.target_sz_h * (1 - lr) + target[3] * lr,
+        res_w = np.clip(self.target_sz_w * (1 - lr) + target[3] * lr,
                         Config.min_scale * self.origin_target_sz[1],
                         Config.max_scale * self.origin_target_sz[1])
         # update state
-        self.center_pos = np.array([res_x, res_y])
-        self.target_sz = np.array([res_w, res_h])
-        bbox = np.array([res_x, res_y, res_w, res_h])
-        self.box = {
-            np.clip(bbox[0] - bbox[2] / 2, 0, frame.shape[1]).astype(np.float64),
+        self.center_pos = np.array([res_y, res_x])
+        self.target_sz = np.array([res_h, res_w])
+        bbox = np.array([res_y, res_x, res_h, res_w])
+        self.box = np.array(np.array([
             np.clip(bbox[1] - bbox[3] / 2, 0, frame.shape[0]).astype(np.float64),
-            np.clip(bbox[2], 10, frame.shape[1]).astype(np.float64),
-            np.clip(bbox[3], 10, frame.shape[0]).astype(np.float64)
-        }
-        return self.box, pred_score[highest_score_id]
+            np.clip(bbox[0] - bbox[2] / 2, 0, frame.shape[1]).astype(np.float64),
+            np.clip(bbox[3], 10, frame.shape[0]).astype(np.float64),
+            np.clip(bbox[2], 10, frame.shape[1]).astype(np.float64)
+        ]))
+
+        # return self.box, pred_score[highest_score_id]
+        return self.box

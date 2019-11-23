@@ -63,7 +63,7 @@ class SiameseAlexNet(nn.Module):
         """
         :param template:  输入第一帧图片，把固定的值先计算好并且缓存，作为卷积核固定
         """
-        N = template.size[0]
+        N = template.size(0)
         template_feature = self.sharedFeatExtra(template)
         kernel_cls = self.conv_cls1(template_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
         kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
