@@ -200,8 +200,10 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                         if x % 2 == 1:
                             res = cls_response[x:x + 1, :, :].squeeze().cpu().detach().numpy()
                             cls_res_show.append(res)
-                    for idex, heatmap in cls_res_show:
-                        vis.plot_heatmap(heatmap, win=index*10)
+                    count = 20
+                    for heatmap in cls_res_show:
+                        vis.plot_heatmap(heatmap, win=count)
+                        count += count
                     topk = Config.show_topK
                     vis.plot_img(exem_img.transpose(2, 0, 1), win=1, name='exemplar_img')
                     cls_pred = cls_label_map[0]  # 对这个存疑,看看cls_pred的内容
