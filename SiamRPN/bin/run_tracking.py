@@ -3,7 +3,8 @@ from lib.tracker import SiamRPNTracker
 
 if __name__ == '__main__':
     # setup tracker
-    model_path = '../data/models/siamrpn_epoch_50.pth'
+    # model_path = '../data/models/siamrpn_epoch_50.pth'
+    model_path = '../model/siamrpn_38.pth'
     tracker = SiamRPNTracker(model_path=model_path)
     # setup experiments
     experiments = [

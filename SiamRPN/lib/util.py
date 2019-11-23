@@ -294,3 +294,16 @@ def add_box_img(img, boxes, color=(0, 255, 0)):
                             (int(right_bottom_corner[0]), int(right_bottom_corner[1])),
                             color, 2)
     return img
+
+def use_others_model(model):
+    model_ = model['model']
+    model_ = {k.replace('featureExtract', 'sharedFeatExtra'): v for k, v in model_.items()}
+    model_ = {k.replace('conv_r1', 'conv_reg1'): v for k, v in model_.items()}
+    model_ = {k.replace('conv_r2', 'conv_reg2'): v for k, v in model_.items()}
+    if 'regress_adjust.weight' in model_.keys():
+        model_.pop('regress_adjust.weight')
+    if 'regress_adjust.bias' in model_.keys():
+        model_.pop('regress_adjust.bias')
+    model['model'] = model_
+    return model
+

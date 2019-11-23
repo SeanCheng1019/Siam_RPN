@@ -58,3 +58,5 @@ class Config:
     min_scale = 0.1
     max_scale = 10
     show_net_feature = True
+    use_others = True
+
