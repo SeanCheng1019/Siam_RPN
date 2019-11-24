@@ -3,9 +3,10 @@ from lib.tracker import SiamRPNTracker
 
 if __name__ == '__main__':
     # setup tracker
-    # model_path = '../data/models/siamrpn_epoch_50.pth'
+    #model_path = '../data/models/siamrpn_epoch_15.pth'
     model_path = '../model/siamrpn_38.pth'
     tracker = SiamRPNTracker(model_path=model_path)
+    #tracker = SiamRPNTracker_other(model_path=model_path)
     # setup experiments
     experiments = [
         ExperimentVOT('/home/csy/dataset/dataset/benchmark/data/vot2016', version=2016),

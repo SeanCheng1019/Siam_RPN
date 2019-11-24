@@ -98,7 +98,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         del checkpoint
-        t.cuda().empty_cache()
+        t.cuda.empty_cache()
         print("finish loading previous checkpoint! \n")
     elif not model_path and Config.pretrained_model:  # 需加载预训练模型的时候
         print("load pre-trained checkpoint %s" % Config.pretrained_model + '\n')
@@ -287,7 +287,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
 
 if __name__ == '__main__':
     data_dir = "/home/csy/dataset/dataset/ILSVRC2015_VID_curation2"
-    model_path = None
+    model_path = "../data/models/siamrpn_epoch_16.pth"
     vis_port = 8097
     init = None
     train(data_dir, model_path, vis_port, init)

@@ -129,12 +129,12 @@ class SiamRPNTracker(Tracker):
         self.center_pos = np.array([res_x, res_y])
         self.target_sz = np.array([res_w, res_h])
         bbox = np.array([res_x, res_y, res_w, res_h])
-        self.box = np.array(np.array([
+        self.box = np.array([
             np.clip(bbox[0] - bbox[2] / 2, 0, frame.shape[1]).astype(np.float64),
             np.clip(bbox[1] - bbox[3] / 2, 0, frame.shape[0]).astype(np.float64),
             np.clip(bbox[2], 10, frame.shape[1]).astype(np.float64),
             np.clip(bbox[3], 10, frame.shape[0]).astype(np.float64)
-        ]))
+        ])
 
         # return self.box, pred_score[highest_score_id]
         return self.box

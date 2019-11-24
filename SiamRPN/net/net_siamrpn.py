@@ -39,6 +39,9 @@ class SiameseAlexNet(nn.Module):
         self.conv_cls2 = nn.Conv2d(256, 256, 3)
         self.conv_reg1 = nn.Conv2d(256, 256 * 4 * self.anchor_num_per_position, 3)
         self.conv_reg2 = nn.Conv2d(256, 256, 3)
+        self.regress_adjust = nn.Conv2d(4 * self.anchor_num_per_position,
+                                        4 * self.anchor_num_per_position, 1)
+
 
     def forward(self, template, detection):
         N = template.size(0)
@@ -56,6 +59,8 @@ class SiameseAlexNet(nn.Module):
         kernel_reg = kernel_reg.reshape(-1, 256, 4, 4)
         pred_cls = F.conv2d(conv_cls, kernel_cls, groups=N)
         pred_reg = F.conv2d(conv_reg, kernel_reg, groups=N)
+        pred_reg = self.regress_adjust(pred_reg.reshape(N, 4 * self.anchor_num_per_position,
+                                                        19, 19))
         return pred_cls, pred_reg
 
 
@@ -82,4 +87,6 @@ class SiameseAlexNet(nn.Module):
         conv_reg = conv_reg.reshape(1, -1, reg_map_size, reg_map_size)
         pred_cls = F.conv2d(conv_cls, self.kernel_cls, groups=N)
         pred_reg = F.conv2d(conv_reg, self.kernel_reg, groups=N)
+        pred_reg = self.regress_adjust(pred_reg.reshape(N, 4 * self.anchor_num_per_position,
+                                                        19, 19))
         return pred_cls, pred_reg
