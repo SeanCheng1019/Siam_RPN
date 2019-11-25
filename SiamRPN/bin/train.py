@@ -193,17 +193,17 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                     anchors_show = train_dataset.anchors
                     exem_img = exemplar_imgs[0].cpu().numpy()
                     inst_img = instance_imgs[0].cpu().numpy()
-                    cls_response = cls_map_vis.squeeze()[0:10, :, :]
                     # choose odd layer
-                    cls_res_show = []
-                    for x in range(10):
-                        if x % 2 == 1:
-                            res = cls_response[x:x + 1, :, :].squeeze().cpu().detach().numpy()
-                            cls_res_show.append(res)
-                    count = 20
-                    for heatmap in cls_res_show:
-                        vis.plot_heatmap(heatmap, win=count)
-                        count += count
+                    # cls_response = cls_map_vis.squeeze()[0:10, :, :]
+                    # cls_res_show = []
+                    # for x in range(10):
+                    #     if x % 2 == 1:
+                    #         res = cls_response[x:x + 1, :, :].squeeze().cpu().detach().numpy()
+                    #         cls_res_show.append(res)
+                    # count = 20
+                    # for heatmap in cls_res_show:
+                    #     vis.plot_heatmap(heatmap, win=count)
+                    #     count += count
                     topk = Config.show_topK
                     vis.plot_img(exem_img.transpose(2, 0, 1), win=1, name='exemplar_img')
                     cls_pred = cls_label_map[0]  # 对这个存疑,看看cls_pred的内容
@@ -287,7 +287,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
 
 if __name__ == '__main__':
     data_dir = "/home/csy/dataset/dataset/ILSVRC2015_VID_curation2"
-    model_path = "../data/models/siamrpn_epoch_16.pth"
+    model_path = None
     vis_port = 8097
     init = None
     train(data_dir, model_path, vis_port, init)

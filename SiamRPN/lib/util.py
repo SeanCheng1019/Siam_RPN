@@ -38,7 +38,7 @@ def get_instance_img(img, bbox, size_z, size_x, context_margin_amount, img_mean=
     # 因为resize过，所以目标的尺寸要从原图乘上resize的ratio
     w_instance = w * scale_ratio_x
     h_instance = h * scale_ratio_x
-    return instance_img, w_instance, h_instance, scale_ratio_x
+    return instance_img, w_instance, h_instance, scale_ratio
 
 
 def get_exemplar_img(img, bbox, size_z, context_margin_amount, img_mean=None):

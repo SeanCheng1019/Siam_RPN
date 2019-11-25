@@ -1,5 +1,6 @@
 from got10k.experiments import *
-from lib.tracker import SiamRPNTracker
+#from lib.tracker import SiamRPNTracker
+from bin.tracker_other import SiamRPNTracker
 
 if __name__ == '__main__':
     # setup tracker

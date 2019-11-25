@@ -46,22 +46,19 @@ class SiamRPNTracker(Tracker):
         :param bbox: left top corner, w, h
         :return:
         """
-        self.center_pos = np.array(  # cx, cy
-            [bbox[0] + bbox[2] / 2 - 0.5,
-             bbox[1] + bbox[3] / 2 - 0.5]
-        )
-        self.target_sz = np.array([bbox[2], bbox[3]])  # w, h
-        self.target_sz_w, self.target_sz_h = bbox[2], bbox[3]
-        self.origin_target_sz = np.array([bbox[2], bbox[3]])  # w, h
-        self.box = np.array([
+        bbox = np.array([
             bbox[0] + bbox[2] / 2 - 0.5,
             bbox[1] + bbox[3] / 2 - 0.5,
             bbox[2],
             bbox[3]]
         )
+        self.center_pos = bbox[:2]
+        self.target_sz = bbox[2:]
+        self.target_sz_w, self.target_sz_h = bbox[2], bbox[3]
+        self.origin_target_sz = np.array([bbox[2], bbox[3]])  # w, h
         self.img_mean = np.mean(frame, axis=(0, 1))
-        frame = np.asarray(frame)
-        exemplar_img, scale_ratio, _ = get_exemplar_img(frame, self.box, Config.exemplar_size,
+        frame = np.array(frame)
+        exemplar_img, scale_ratio, _ = get_exemplar_img(frame, bbox, Config.exemplar_size,
         Config.context_margin_amount, self.img_mean)
         exemplar_img = self.transforms(exemplar_img)[None, :, :, :]
         self.model.track_init(exemplar_img.permute(0, 3, 1, 2).cuda())
@@ -72,8 +69,9 @@ class SiamRPNTracker(Tracker):
         :param frame: an numpy type image with 3 channel
         :return: bbox：[xmin, ymin, w, h]
         """
-        frame = np.asarray(frame)
-        instance_img, _, _, scale_detection = get_instance_img(frame, self.box, Config.exemplar_size,
+        frame = np.array(frame)
+        box = np.hstack([self.center_pos, self.target_sz])
+        instance_img, _, _, scale_detection = get_instance_img(frame, box, Config.exemplar_size,
                                                                Config.instance_size, Config.context_margin_amount,
                                                                self.img_mean)
         instance_img = self.transforms(instance_img)[None, :, :, :]
@@ -130,7 +128,7 @@ class SiamRPNTracker(Tracker):
         self.center_pos = np.array([res_x, res_y])
         self.target_sz = np.array([res_w, res_h])
         bbox = np.array([res_x, res_y, res_w, res_h])
-        self.box = np.array([
+        box = np.array([
             np.clip(bbox[0] - bbox[2] / 2, 0, frame.shape[1]).astype(np.float64),
             np.clip(bbox[1] - bbox[3] / 2, 0, frame.shape[0]).astype(np.float64),
             np.clip(bbox[2], 10, frame.shape[1]).astype(np.float64),
@@ -139,4 +137,4 @@ class SiamRPNTracker(Tracker):
 
 
         # return self.box, pred_score[highest_score_id]
-        return self.box
+        return box
