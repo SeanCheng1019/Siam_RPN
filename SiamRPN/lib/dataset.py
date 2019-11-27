@@ -72,7 +72,7 @@ class GetDataSet(Dataset):
                 continue
             if not Config.ratio_range[0] <= exemplar_ratio < Config.ratio_range[1]:
                 continue
-            # 选到模版图片
+            # 选到模版图片 (511,511)
             exemplar_img = self.imread(exemplar_whole_path_name)
             # 开始选instance image
             frame_range = Config.frame_range
@@ -101,7 +101,7 @@ class GetDataSet(Dataset):
                 continue
             if not Config.ratio_range[0] <= instance_ratio < Config.ratio_range[1]:
                 continue
-            # 选得搜索图片
+            # 选得搜索图片 (511,511)
             instance_img = self.imread(instance_whole_path_name)
             # 进行图片随机色彩空间转换，一种数据增强
             if np.random.rand(1) < Config.gray_ratio:  # 这里为什么要转了2次

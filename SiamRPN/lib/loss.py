@@ -39,9 +39,15 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
         min_neg = int(min(len(pos_index) * num_neg / num_pos, num_neg))
         if ohem_pos:
             if len(pos_index) > 0:
+                if len(pos_index) == 1:
+                    pos_loss_temp = F.cross_entropy(input=input[batch_id][pos_index.tolist()],
+                                                    target=target[batch_id][pos_index.tolist()[0]],
+                                                    reduction='none')
+                else:
                 # 先对所有都做交叉熵损失
-                pos_loss_temp = F.cross_entropy(input=input[batch_id][pos_index.tolist()],
-                                                target=target[batch_id][pos_index.tolist()].squeeze(), reduction='none')
+                    pos_loss_temp = F.cross_entropy(input=input[batch_id][pos_index.tolist()],
+                                                target=target[batch_id][pos_index.tolist()].squeeze(),
+                                                reduction='none')
                 # 用nms去除非极大值的框
                 selected_pos_index = nms(anchors[pos_index.tolist()],
                                          pos_loss_temp.cpu().detach().numpy(), min_pos)
@@ -52,13 +58,13 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
             # 随机选出min_pos个数的正样本
             if len(pos_index) > 0:
                 pos_index_random = random.sample(pos_index.tolist(), min_pos)
-               # print("处理loss \n", pos_index_random, input[batch_id][pos_index_random].shape,
-               #       target[batch_id][pos_index_random].squeeze().shape, target[batch_id][pos_index_random].squeeze(), "\n")
+                # print("处理loss \n", pos_index_random, input[batch_id][pos_index_random].shape,
+                #       target[batch_id][pos_index_random].squeeze().shape, target[batch_id][pos_index_random].squeeze(), "\n")
                 # 为了处理cross_entropy的维度问题
                 if len(pos_index_random) == 1:
-                    #print("处理1个的情况")
+                    # print("处理1个的情况")
                     pos_loss_final = F.cross_entropy(input=input[batch_id][pos_index_random],
-                                                target=target[batch_id][pos_index_random[0]], reduction='none')
+                                                     target=target[batch_id][pos_index_random[0]], reduction='none')
                 else:
                     pos_loss_final = F.cross_entropy(input=input[batch_id][pos_index_random],
                                                      target=target[batch_id][pos_index_random].squeeze(),
@@ -74,7 +80,7 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
             else:
                 # 只有负样本
                 neg_loss_temp = F.cross_entropy(input=input[batch_id][neg_index.tolist()],
-                                                target=target[batch_id][neg_index.tolsit()].squeeze(), reduction='none')
+                                                target=target[batch_id][neg_index.tolist()].squeeze(), reduction='none')
                 selected_neg_index = nms(anchors[neg_index], neg_loss_temp.cpu().detach().numpy(), num_neg)
                 neg_loss_final = neg_loss_temp[selected_neg_index]
         else:
@@ -111,7 +117,7 @@ def rpn_smoothL1(input, target, label, num_pos, ohem=None):
             if len(pos_index) > 0:
                 # loss的维度是？
                 loss = F.smooth_l1_loss(input=input[batch_id][pos_index],
-                                        target=target[batch_id][pos_index].squeeze(), reduction='none')
+                                        target=target[batch_id][pos_index], reduction='none')
                 sort_index = t.argsort(loss.mean(1))
                 loss_ohem = loss[sort_index[-num_pos:]]
             else:

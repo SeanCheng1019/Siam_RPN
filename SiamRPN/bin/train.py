@@ -265,7 +265,10 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
         valid_loss = np.mean(valid_loss)
         print("[EPOCH %2d] valid_loss: %.4f, train_loss: %.4f" % (epoch, valid_loss, train_loss))
         # 这里验证集的add_scalar的step参数和之前训练时候的不同
-        summary_writer.add_scalar('valid/loss', valid_loss, (epoch + 1) * len(trainloader))
+        summary_writer.add_scalars('valid', {'cls_loss': cls_loss.data.item(),
+                                            'reg_loss': reg_loss.data.item(),
+                                            'total_loss': loss.data.item()},
+                                  (epoch + 1) * len(trainloader))
         ajust_learning_rate(optimizer, Config.gamma)
         # save model
         if epoch % Config.save_interval == 0:

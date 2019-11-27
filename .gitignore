@@ -3,6 +3,7 @@
 .DS_Store
 *.swp
 *.csy
+*.txt
 */build/*
 */__pycache__/*
 __pycache__/
@@ -14,4 +15,7 @@ models/*
 models/logs/*
 *.mat
 .idea
+*.json
+*.png
+
 
