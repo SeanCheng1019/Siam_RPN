@@ -27,7 +27,7 @@ def process_single_document_data(sequence_dir, output_dir):
 
     for image_name in image_names:
         img = cv2.imread(image_name)
-        img_weight, img_height, _ = img.shape
+        img_height, img_weight,  _ = img.shape
         # R，G，B 通道的平均像素值
         img_mean = tuple(map(int, img.mean(axis=(0, 1))))
         # 对应GT的路径

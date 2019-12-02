@@ -59,4 +59,5 @@ class Config:
     max_scale = 10
     show_net_feature = True
     use_others = True
+    memAlign = True
 
