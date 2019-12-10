@@ -22,7 +22,7 @@ def cxcywh2xyxy(bboxes):
     x1 = bboxes[:, 0:1] - bboxes[:, 2:3] / 2 + 0.5
     x2 = x1 + bboxes[:, 2:3] - 1
     y1 = bboxes[:, 1:2] - bboxes[:, 3:4] / 2 + 0.5
-    y2 = y1 + bboxes[:, 2:3] - 1
+    y2 = y1 + bboxes[:, 3:4] - 1
     return np.concatenate([x1, y1, x2, y2], 1), x1, x2, y1, y2
 
 
@@ -98,7 +98,7 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
 
 def round_up(value):
     # 保证两位小数的精确四舍五入
-    return round(value + 1e-6 + 1000) - 1000
+    return round(value + 1e-6 + 000) - 1000
 
 
 def get_axis_aligned_box(region):
@@ -178,14 +178,6 @@ def compute_iou(anchors, box):
     gt_box = np.tile(box.reshape(1, -1), (anchors.shape[0], 1))
     _, anchor_x1, anchor_x2, anchor_y1, anchor_y2 = cxcywh2xyxy(anchors)
     _, gt_x1, gt_x2, gt_y1, gt_y2 = cxcywh2xyxy(gt_box)
-    # anchor_x1 = anchors[:, :1] - anchors[:, 2:3] / 2 + 0.5
-    # anchor_x2 = anchors[:, :1] + anchors[:, 2:3] / 2 - 0.5
-    # anchor_y1 = anchors[:, 1:2] - anchors[:, 3:] / 2 + 0.5
-    # anchor_y2 = anchors[:, 1:2] + anchors[:, 3:] / 2 - 0.5
-    # gt_x1 = gt_box[:, :1] - gt_box[:, 2:3] / 2 + 0.5
-    # gt_x2 = gt_box[:, :1] + gt_box[:, 2:3] / 2 - 0.5
-    # gt_y1 = gt_box[:, 1:2] - gt_box[:, 3:] / 2 + 0.5
-    # gt_y2 = gt_box[:, 1:2] + gt_box[:, 3:] / 2 - 0.5
     overlap_x1 = np.max([anchor_x1, gt_x1], axis=0)
     overlap_x2 = np.min([anchor_x2, gt_x2], axis=0)
     overlap_y1 = np.max([anchor_y1, gt_y1], axis=0)
@@ -231,7 +223,7 @@ def generate_anchors(total_stride, base_size, scales, ratios, score_map_size):
     size = np.square(base_size)
     count = 0
     '''
-    原来的面积是 base_size*base_size=size, 改变后是base_size*(base_size*ratio)=size
+    原来的面积是 base_size*base_size=size, 改变后是base_size0*base_size0*ratio=size
     所以计算新的边长是sqrt(size/ratio)
     '''
     for ratio in ratios:

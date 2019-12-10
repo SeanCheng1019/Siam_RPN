@@ -103,7 +103,7 @@ class GetDataSet(Dataset):
                 continue
             # 选得搜索图片 (511,511)
             instance_img = self.imread(instance_whole_path_name)
-            # 进行图片随机色彩空间转换，一种数据增强
+            # 进行图片随机色彩空间转换，一种数据增强 
             if np.random.rand(1) < Config.gray_ratio:  # 这里为什么要转了2次
                 exemplar_img = cv2.cvtColor(exemplar_img, cv2.COLOR_RGB2GRAY)
                 exemplar_img = cv2.cvtColor(exemplar_img, cv2.COLOR_GRAY2RGB)

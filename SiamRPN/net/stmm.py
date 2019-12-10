@@ -1,6 +1,10 @@
 import torch.nn as nn
 from net.config import Config
 import torch as t
+from torch.autograd import Variable
+from net.feature_align import FeatureAlign
+import numpy as np
+
 
 class STMM(nn.Module):
 
@@ -8,8 +12,8 @@ class STMM(nn.Module):
         """
         :param N: seq_per_batch
         :param T: time step_per_batch
-        :param D: input data
-        :param M: memory
+        :param D: input channel
+        :param M: hidden channel (memory)
         :param MULT:
         """
         super(STMM, self).__init__()
@@ -18,7 +22,38 @@ class STMM(nn.Module):
         self.D = D
         self.M = M
         self.MULT = MULT or 1
-        self.cell_constructed_flag = False
+        cell = STMM_cell(D, M)
+        self.cell = cell
+
+    def forward(self, x, mem=None):
+        _, C, H, W = x.shape()
+        N, T, M = self.N, self.T, self.M
+        feat_input = x.reshape(N, T, C, H, W)
+        if mem == None:
+            mem = Variable(t.zeros([N, M, H, W])).cuda()
+        self.mem_input = []
+        self.mem_output = []
+        self.z_output = []
+        self.r_output = []
+        for time in range(T):
+            feat_node = feat_input[:, time, :, :, :]
+            if t == 0:
+                prev_feat = feat_input[:, time, :, :, :]
+            else:
+                prev_feat = feat_input[:, time - 1, :, :, :]
+            self.mem_input.append(mem)
+            mem0, z, r = self.cell(feat_node, mem, prev_feat)
+            mem = mem0  # update mem , 给下一次输入做准备
+            self.mem_output.append(mem0)
+            self.z_output.append(z)
+            self.r_output.append(r)
+        output = np.stack(self.mem_output).reshape(T, N, M, H, W).transpose(0, 1).contiguous()
+        return output
+
+
+class STMM_cell(nn.Module):
+    def __init__(self, D, M):
+        super().__init__()
         self.conv_w = nn.Conv2d(D, M, 3, 1, 1)
         self.conv_u = nn.Conv2d(M, M, 3, 1, 1, bias=False)
         self.conv_z_w = nn.Conv2d(D, M, 3, 1, 1)
@@ -26,35 +61,22 @@ class STMM(nn.Module):
         self.conv_r_w = nn.Conv2d(D, M, 3, 1, 1)
         self.conv_r_u = nn.Conv2d(M, M, 3, 1, 1, bias=False)
 
-    def forward(self, feat_input, prev_feat_input=None, mem_input=None):
-
-
-
-
-class STMM_cell(nn.Module):
-    def __init__(self, conv_w, conv_u, conv_z_w, conv_z_u, conv_r_w,
-                 conv_r_u, feat_input, prev_feat_input, mem_input):
-        super().__init__()
-        #  特征对齐
+    def forward(self, feat_input, prev_mem, prev_feat):
+        """
+        :param feat_input:
+        :param prev_mem:
+        :param prev_feat:
+        :return:
+        """
         if Config.memAlign:
-            pass
+            mem0 = FeatureAlign(feat_input, prev_feat, prev_mem)
         else:
             pass
-        self.conv_w = conv_w
-        self.conv_u = conv_u
-        self.conv_z_u = conv_z_u
-        self.conv_z_w = conv_z_w
-        self.conv_r_w = conv_r_w
-        self.conv_r_u = conv_r_u
-    def forward(self, feat, mem):
-        if mem is None:
-            h = t.sigmoid(self.conv_z_w(feat)) * t.tanh(self.conv_z_u(feat))
-            return h, h
-        else:
-            z = t.sigmoid(self.conv_z_w(feat) + self.conv_z_u(mem))
-            r = t.sigmoid(self.conv_r_w(feat) + self.conv_r_u(mem))
-            h_ = t.tanh(self.conv_w(feat) + self.conv_u(r * mem))
-            h = (1 - z) * mem + z * h_
-            return h, h
 
+        #  特征对齐
+        z = t.relu(self.conv_z_w(feat_input) + self.conv_z_u(mem0))
+        r = t.relu(self.conv_r_w(feat_input) + self.conv_r_u(mem0))
+        mem_ = t.relu(self.conv_w(feat_input) + self.conv_u(r * mem0))
+        mem = (1 - z) * mem0 + z * mem_
 
+        return mem, z, r
