@@ -5,7 +5,7 @@ import lib.util_net as network
 
 class VGG16(nn.Module):
     def __init__(self, bn=False):
-        super(VGG16).__init__()
+        super(VGG16, self).__init__()
         self.conv1 = nn.Sequential(Conv2d(3, 64, 3, same_padding=True, bn=bn),
                                    Conv2d(64, 64, 3, same_padding=True, bn=bn),
                                    nn.MaxPool2d(2))
@@ -15,11 +15,11 @@ class VGG16(nn.Module):
         network.set_trainable(self.conv1, requires_grad=False)
         network.set_trainable(self.conv2, requires_grad=False)
 
-        self.conv3 = nn.Sequential(Conv2d(128, 256, 3, same_padding=True, bn=bn),
+        self.conv3 = nn.Sequential(Conv2d(128, 256, 3, same_padding=False, bn=bn),
                                    Conv2d(256, 256, 3, same_padding=True, bn=bn),
                                    Conv2d(256, 256, 3, same_padding=True, bn=bn),
                                    nn.MaxPool2d(2))
-        self.conv4 = nn.Sequential(Conv2d(256, 512, 3, same_padding=True, bn=bn),
+        self.conv4 = nn.Sequential(Conv2d(256, 512, 3, same_padding=False, bn=bn),
                                    Conv2d(512, 512, 3, same_padding=True, bn=bn),
                                    Conv2d(512, 512, 3, same_padding=True, bn=bn),
                                    nn.MaxPool2d(2))
@@ -27,11 +27,10 @@ class VGG16(nn.Module):
                                    Conv2d(512, 512, 3, same_padding=True, bn=bn),
                                    Conv2d(512, 512, 3, same_padding=True, bn=bn))
 
-
     def forward(self, im_data):
-        x = self.conv1(im_data)
-        x = self.conv2(x)
-        x = self.conv3(x)
+        x = self.conv1(im_data)  #  63
+        x = self.conv2(x)  # 31
+        x = self.conv3(x)  # 15
         x = self.conv4(x)
         x = self.conv5(x)
         return x

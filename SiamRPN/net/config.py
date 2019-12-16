@@ -51,7 +51,7 @@ class Config:
     clip = 10
     show_interval = 3
     save_interval = 1
-    show_topK = 3
+    show_topK = 1
     penalty_k = 0.04
     window_influence = 0.44
     track_lr = 0.4
@@ -59,5 +59,9 @@ class Config:
     max_scale = 10
     show_net_feature = True
     use_others = True
-    memAlign = True
+    memAlign = False
+    his_window = 5
+    stmm_train_batch_size = 8
+    stmm_valid_batch_size = 1
+    update_template = True
 

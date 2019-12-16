@@ -44,10 +44,10 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
                                                     target=target[batch_id][pos_index.tolist()[0]],
                                                     reduction='none')
                 else:
-                # 先对所有都做交叉熵损失
+                    # 先对所有都做交叉熵损失
                     pos_loss_temp = F.cross_entropy(input=input[batch_id][pos_index.tolist()],
-                                                target=target[batch_id][pos_index.tolist()].squeeze(),
-                                                reduction='none')
+                                                    target=target[batch_id][pos_index.tolist()].squeeze(),
+                                                    reduction='none')
                 # 用nms去除非极大值的框
                 selected_pos_index = nms(anchors[pos_index.tolist()],
                                          pos_loss_temp.cpu().detach().numpy(), min_pos)
@@ -88,7 +88,6 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
             if len(pos_index) > 0:
                 neg_index_random = random.sample(neg_index.tolist(), min_neg)
                 neg_loss_final = F.cross_entropy(input=input[batch_id][neg_index_random],
-
                                                  target=target[batch_id][neg_index_random].squeeze(), reduction='none')
             # 对所有的负样本进行损失计算
             else:

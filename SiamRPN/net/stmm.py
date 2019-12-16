@@ -26,8 +26,8 @@ class STMM(nn.Module):
         self.cell = cell
 
     def forward(self, x, mem=None):
-        _, C, H, W = x.shape()
-        N, T, M = self.N, self.T, self.M
+        N_, C, H, W = x.shape
+        N, T, M = int(N_ / Config.his_window), self.T, self.M
         feat_input = x.reshape(N, T, C, H, W)
         if mem == None:
             mem = Variable(t.zeros([N, M, H, W])).cuda()
@@ -37,7 +37,7 @@ class STMM(nn.Module):
         self.r_output = []
         for time in range(T):
             feat_node = feat_input[:, time, :, :, :]
-            if t == 0:
+            if time == 0:
                 prev_feat = feat_input[:, time, :, :, :]
             else:
                 prev_feat = feat_input[:, time - 1, :, :, :]
@@ -47,7 +47,8 @@ class STMM(nn.Module):
             self.mem_output.append(mem0)
             self.z_output.append(z)
             self.r_output.append(r)
-        output = np.stack(self.mem_output).reshape(T, N, M, H, W).transpose(0, 1).contiguous()
+        mem_output = [x.cpu().detach().numpy() for x in self.mem_output]
+        output = t.from_numpy(np.stack(mem_output).reshape(T, N, M, H, W).transpose(1, 0, 2, 3, 4)).contiguous()
         return output
 
 
@@ -68,12 +69,13 @@ class STMM_cell(nn.Module):
         :param prev_feat:
         :return:
         """
+
         if Config.memAlign:
             mem0 = FeatureAlign(feat_input, prev_feat, prev_mem)
         else:
-            pass
+            mem0 = feat_input + 0 * prev_mem
 
-        #  特征对齐
+        #  特征对齐   (这里的relu是临时的，还需要改成和论文里一样的relu)
         z = t.relu(self.conv_z_w(feat_input) + self.conv_z_u(mem0))
         r = t.relu(self.conv_r_w(feat_input) + self.conv_r_u(mem0))
         mem_ = t.relu(self.conv_w(feat_input) + self.conv_u(r * mem0))

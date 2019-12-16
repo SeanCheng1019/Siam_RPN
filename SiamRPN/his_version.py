@@ -1,3 +1,204 @@
+from torch.utils.data.dataset import Dataset
+import numpy as np
+from net.config import Config
+from lib.util import generate_anchors, crop_and_pad, box_delta_in_gt_anchor, compute_iou, get_wh_from_img_path, \
+    choose_inst_img_through_exm_img
+from lib.custom_transforms import RandomStretch
+from torchvision.transforms import transforms
+from glob import glob
+import os
+import cv2
+
+
+class GetDataSet(Dataset):
+    """
+     之前得分割的训练集和验证集是一个一个视频序列的文件夹，这个类的作用是为了在训练的时候每次迭代时，
+     从这些不同序列的文件夹中，得到每个视频序列中一对一对的图片，从而可以对这些图片直接放入网络中去。
+     其中有加入一些数据增强的操作。
+    """
+
+    def __init__(self, sequence_names, data_dir, z_transforms, x_transforms, meta_data, training=True):
+        self.sequence_names = sequence_names
+        self.data_dir = data_dir
+        self.z_transforms = z_transforms
+        self.x_transforms = x_transforms
+        self.meta_data = meta_data
+        # 初始化的时候，把在一个序列里只出现2帧以内的目标筛除掉。
+        self.meta_data = {x[0]: x[1] for x in meta_data}
+        # 训练模式都是从一个序列中成对成对的去选的
+        self.num = len(sequence_names) if not training else \
+            Config.pairs_per_sequence_per_epoch * len(sequence_names)
+        for track_sequence_name in self.meta_data.keys():
+            track_sequence_info = self.meta_data[track_sequence_name]
+            for object_id in list(track_sequence_info.keys()):
+                if len(track_sequence_info[object_id]) < Config.his_window + 2:
+                    del track_sequence_info[object_id]
+        self.training = training
+        self.max_stretch = Config.scale_resize  # 干啥用
+        self.max_shift = Config.max_shift
+        self.center_crop_size = Config.exemplar_size  # 裁剪模版用的尺寸
+        self.random_crop_size = Config.instance_size  # 裁剪搜索区域用的尺寸
+        self.anchors = generate_anchors(Config.total_stride, Config.anchor_base_size, Config.anchor_scales,
+                                        Config.anchor_ratio, Config.score_map_size)
+        self.choosed_idx = []
+
+    def __getitem__(self, idx):  # 何时调用的，何时传入的index参数
+        all_idx = np.arange(self.num)
+        np.random.shuffle(all_idx)
+
+        # 先选一个序列，然后序列里选个目标，然后选择一帧。
+        for index in all_idx:
+            index = index % len(self.sequence_names)
+            self.choosed_idx.append(index)  # 记录看看选中了哪些序列
+            sequence = self.sequence_names[index]
+            trajs = self.meta_data[sequence]
+            if len(trajs.keys()) == 0:
+                continue
+            trkid = np.random.choice(list(trajs.keys()))
+            trk_frames = trajs[trkid]
+            assert len(trk_frames) > 1, "sequence_name: {}".format(sequence)
+            exemplar_imgs = []
+            exemplar_whole_path_names = []
+            exemplar_gt_ws = []
+            exemplar_gt_hs = []
+            exemplar_img_ws = []
+            exemplar_img_hs = []
+            # 选择图片
+            if Config.update_template:
+                # 选 his_window + 1 张， 多出的一张模拟成template，通过Alex-Net
+                start_idx = np.random.choice(list(range(len(trk_frames) - Config.his_window - 1)))
+                exemplar_indexs = list(range(start_idx, start_idx + Config.his_window + 1))
+            else:
+                start_idx = np.random.choice(list(range(len(trk_frames))))
+                exemplar_indexs = list(range(start_idx, start_idx + 1))
+
+            for id in range(len(exemplar_indexs)):
+                exemplar_whole_path_name = glob(os.path.join(self.data_dir, sequence, trk_frames[exemplar_indexs[id]] +
+                                                             ".{:02d}.patch*.jpg".format(trkid)))[0]
+                exemplar_whole_path_names.append(exemplar_whole_path_name)
+                exemplar_gt_w, exemplar_gt_h, exemplar_img_w, exemplar_img_h = get_wh_from_img_path(
+                    exemplar_whole_path_names[id])
+                exemplar_gt_ws.append(exemplar_gt_w)
+                exemplar_gt_hs.append(exemplar_gt_h)
+                exemplar_img_ws.append(exemplar_img_w)
+                exemplar_img_hs.append(exemplar_img_h)
+                # 选到模版图片 (511,511)
+                exemplar_img = self.imread(exemplar_whole_path_name)
+                exemplar_imgs.append(exemplar_img)
+            # 开始选instance image
+            instance_file_name = choose_inst_img_through_exm_img(start_idx, trk_frames)
+            instance_whole_path_name = glob(os.path.join(self.data_dir, sequence, instance_file_name +
+                                                         ".{:02d}.patch*.jpg".format(trkid)))[0]
+            # 和之前选exemplar的操作一样
+            instance_gt_w, instance_gt_h, instance_img_w, instance_img_h = get_wh_from_img_path(
+                instance_whole_path_name)
+            instance_ratio = min(instance_gt_h / instance_gt_w, instance_gt_w / instance_gt_h)
+            instance_scale = instance_gt_w * instance_gt_h / (instance_img_w * instance_img_h)
+            # 为了过滤掉一些特殊的案例
+            if not Config.scale_range[0] <= instance_scale < Config.scale_range[1]:
+                continue
+            if not Config.ratio_range[0] <= instance_ratio < Config.ratio_range[1]:
+                continue
+            # 选得搜索图片 (511,511)
+            instance_img = self.imread(instance_whole_path_name)
+            # 进行图片随机色彩空间转换，一种数据增强
+            if np.random.rand(1) < Config.gray_ratio:  # 这里为什么要转了2次
+                instance_img = cv2.cvtColor(instance_img, cv2.COLOR_RGB2GRAY)
+                instance_img = cv2.cvtColor(instance_img, cv2.COLOR_GRAY2RGB)
+            # exemplar_img的数据增强
+            for i in range(len(exemplar_imgs)):
+                if np.random.rand(1) < Config.gray_ratio:
+                    exemplar_imgs[i] = cv2.cvtColor(exemplar_imgs[i], cv2.COLOR_RGB2GRAY)
+                    exemplar_imgs[i] = cv2.cvtColor(exemplar_imgs[i], cv2.COLOR_GRAY2RGB)
+                if Config.exemplar_stretch:
+                    # 再次缩放尺寸
+                    exemplar_imgs[i], exemplar_gt_ws[i], exemplar_gt_hs[i] = self.randomStretch(exemplar_imgs[i],
+                                                                                                exemplar_gt_ws[i],
+                                                                                                exemplar_gt_hs[i])
+                # 若有放缩的操作后，要保证尺寸要回到规定的尺寸
+                exemplar_imgs[i], _ = crop_and_pad(exemplar_imgs[i], (exemplar_imgs[i].shape[0] - 1) / 2,
+                                                   (exemplar_imgs[i].shape[1] - 1) / 2, self.center_crop_size,
+                                                   self.center_crop_size)
+                exemplar_imgs[i] = self.z_transforms(exemplar_imgs[i])
+
+            # 返回放缩后的图片，放缩后的目标宽高
+            instance_img, instance_gt_w, instance_gt_h = self.randomStretch(instance_img, instance_gt_w,
+                                                                            instance_gt_h)
+            img_h, img_w, _ = instance_img.shape
+            cx_origin, cy_origin = (img_w - 1) / 2, (img_h - 1) / 2
+            # 加中心偏移，减轻只在中心找目标的趋势
+            cx_add_shift, cy_add_shift = cx_origin + np.random.randint(-self.max_shift, self.max_shift), \
+                                         cy_origin + np.random.randint(-self.max_shift, self.max_shift)
+            instance_img, scale = crop_and_pad(instance_img, cx_add_shift, cy_add_shift,
+                                               self.random_crop_size, self.random_crop_size)
+            # x和y的相对位置，相对于中心点的
+            instance_gt_shift_cx, instance_gt_shift_cy = cx_origin - cx_add_shift, cy_origin - cy_add_shift
+            instance_img = self.x_transforms(instance_img)
+            # 训练时，将回归分支锚框和gt的差返回，将分类分支锚框label返回
+            # 这里的cx，cy，以及训练时预测的cx，cy都是相对位置，相对于中心点的
+            regression_target, cls_label_map = self.compute_target(self.anchors,
+                                                                   np.array(list(map(round,
+                                                                                     [instance_gt_shift_cx,
+                                                                                      instance_gt_shift_cy,
+                                                                                      instance_gt_w,
+                                                                                      instance_gt_h]))))
+            return exemplar_imgs, instance_img, regression_target, cls_label_map.astype(np.int64)
+
+    def imread(self, img_dir):
+        img = cv2.imread(img_dir)
+        return img
+
+    def sample_weights(self, center, low_idx, high_idx, sample_type='uniform'):
+        """
+         采样权重
+        """
+        weights = list(range(low_idx, high_idx))
+        weights.remove(center)
+        weights = np.array(weights)
+        if sample_type == 'linear':
+            weights = abs(weights - center)
+        if sample_type == 'sqrt':
+            weights = np.sqrt(abs(weights - center))
+        if sample_type == 'uniform':
+            weights = np.ones_like(weights)
+        return weights / sum(weights)
+
+    def randomStretch(self, origin_img, gt_w, gt_h):
+        h, w = origin_img.shape[:2]
+        transform = transforms.Compose([
+            RandomStretch()
+        ])
+        origin_img = transform(origin_img)
+        scaled_h, scaled_w = origin_img.shape[:2]
+        scale_ratio_w, scale_ratio_h = scaled_w / w, scaled_h / h
+        gt_w = scale_ratio_w * gt_w
+        gt_h = scale_ratio_h * gt_h
+        return origin_img, gt_w, gt_h
+
+    def compute_target(self, anchors, box):
+        """
+        :param box: 这里box的cx，cy是相对于中心点的相对位置
+        :return: regression_target 4位偏移量 ， cls_label_map 1位标签0或1
+                regression_target 1805,4
+                cls_label_map 1805,1
+        """
+        regression_target = box_delta_in_gt_anchor(anchors, box)
+        anchors_iou = compute_iou(anchors, box)
+        pos_index = np.where(anchors_iou > Config.iou_pos_threshold)[0]
+        neg_index = np.where(anchors_iou < Config.iou_neg_threshold)[0]
+        cls_label_map = np.ones_like(anchors_iou) * -1
+        cls_label_map[pos_index] = 1
+        cls_label_map[neg_index] = 0
+        return regression_target, cls_label_map
+
+    def __len__(self):
+        return self.num
+
+
+
+
+
+
 import numpy as np
 import cv2
 import os
@@ -148,18 +349,19 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             # 每次加载一个mini-batch数量的样本
             # exemplar_imgs size:[32,127,127,3]  regression_target size:[32,1805,4]
             exemplar_imgs, instance_imgs, regression_target, cls_label_map, instance_his_imgs = data
-            if Config.update_template:  # 这里收集的历史搜索帧的大小已经裁剪成 模板大小
-                instance_his_imgs = [x.numpy() for x in instance_his_imgs]
-                instance_his_imgs = np.stack(instance_his_imgs).transpose(1, 0, 2, 3, 4)
-                instance_his_imgs = instance_his_imgs.reshape(-1, Config.exemplar_size, Config.exemplar_size, 3)
-                # exemplar_imgs = np.concatenate(exemplar_imgs, axis=0)  # 合并第一第二维度，因为网络的输入规定四维
-                instance_his_imgs = t.from_numpy(instance_his_imgs)
-
+            if Config.update_template:
+                exemplar_imgs = [x.numpy() for x in exemplar_imgs]
+                exemplar_imgs = np.stack(exemplar_imgs).transpose(1, 0, 2, 3, 4)
+                exemplar_imgs = exemplar_imgs.reshape(-1, Config.exemplar_size, Config.exemplar_size, 3)
+                #exemplar_imgs = np.concatenate(exemplar_imgs, axis=0)  # 合并第一第二维度，因为网络的输入规定四维
+                exemplar_imgs = t.from_numpy(exemplar_imgs)
+            else:
+                exemplar_imgs = exemplar_imgs[0]
             regression_target, cls_label_map = regression_target.cuda(), cls_label_map.cuda()
             pred_cls_score, pred_regression = model(exemplar_imgs.cuda(),
                                                     instance_imgs.cuda(),
-                                                    instance_his_imgs,
                                                     training=True)
+            cls_map_vis, regression_map_vis = pred_cls_score, pred_regression
             pred_cls_score = pred_cls_score.reshape(-1, 2,
                                                     Config.anchor_num *
                                                     Config.score_map_size *
@@ -201,7 +403,12 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                 # 可视化
                 if vis_port:
                     anchors_show = train_dataset.anchors
-                    exem_img = exemplar_imgs[0].cpu().detach().numpy()
+                    if Config.update_template:
+                        template_wh = exemplar_imgs.size(2)
+                        exemplar_imgs = exemplar_imgs.view(Config.stmm_train_batch_size, Config.his_window + 1, template_wh, template_wh, 3)
+                        exem_img = exemplar_imgs[0][0].cpu().detach().numpy()
+                    else:
+                        exem_img = exemplar_imgs[0].cpu().detach().numpy()
                     inst_img = instance_imgs[0].cpu().detach().numpy()
                     # choose odd layer and show the heatmap
                     # cls_response = cls_map_vis.squeeze()[0:10, :, :]
@@ -256,17 +463,17 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
         valid_loss = []
         model.eval()
         for i, data in enumerate(tqdm(validloader)):
-            exemplar_imgs, instance_imgs, regression_target, cls_label_map, instance_his_imgs = data
-            if Config.update_template:  # 这里收集的历史搜索帧的大小已经裁剪成 模板大小
-                instance_his_imgs = [x.numpy() for x in instance_his_imgs]
-                instance_his_imgs = np.stack(instance_his_imgs).transpose(1, 0, 2, 3, 4)
-                instance_his_imgs = instance_his_imgs.reshape(-1, Config.exemplar_size, Config.exemplar_size, 3)
-                # exemplar_imgs = np.concatenate(exemplar_imgs, axis=0)  # 合并第一第二维度，因为网络的输入规定四维
-                instance_his_imgs = t.from_numpy(instance_his_imgs)
+            exemplar_imgs, instance_imgs, regression_target, cls_label_map = data
+            if Config.update_template:
+                exemplar_imgs = [x.numpy() for x in exemplar_imgs]
+                exemplar_imgs = np.stack(exemplar_imgs).transpose(1, 0, 2, 3, 4)
+                exemplar_imgs = np.concatenate(exemplar_imgs, axis=0)  # 合并第一第二维度，因为网络的输入规定四维
+                exemplar_imgs = t.from_numpy(exemplar_imgs)
+            else:
+                exemplar_imgs = exemplar_imgs[0]
             regression_target, cls_label_map = regression_target.cuda(), cls_label_map.cuda()
-            pred_cls_score, pred_regression = model(exemplar_imgs.cuda(),
-                                                    instance_imgs.cuda(),
-                                                    instance_his_imgs)
+            pred_cls_score, pred_regression = model(exemplar_imgs.permute(0, 3, 1, 2).cuda(),
+                                                    instance_imgs.permute(0, 3, 1, 2).cuda())
             pred_cls_score = pred_cls_score.reshape(-1, 2,
                                                     Config.anchor_num *
                                                     Config.score_map_size *
@@ -314,9 +521,9 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
 
 if __name__ == '__main__':
     data_dir = "/home/csy/dataset/dataset/ILSVRC2015_VID_curation2"
-    model_path = None
+    model_path = "../data/models/siamrpn_epoch_50.pth"
     vis_port = 8097
-    init = None
+    init = True
     train(data_dir, model_path, vis_port, init)
 
     """

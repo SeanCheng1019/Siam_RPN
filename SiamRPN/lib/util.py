@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import torch as t
+from net.config import Config
 
 
 def get_center(x):
@@ -98,7 +99,7 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
 
 def round_up(value):
     # 保证两位小数的精确四舍五入
-    return round(value + 1e-6 + 000) - 1000
+    return round(value + 1e-6 + 1000) - 1000
 
 
 def get_axis_aligned_box(region):
@@ -256,12 +257,14 @@ def get_topK_box(cls_score, pred_regression, anchors, topk=2):
     pred_box = box_transform_use_reg_offset(anchors, topk_offset)
     return pred_box
 
+
 def norm_to_255(feature):
     max_ori = np.max(feature)
     min_ori = np.min(feature)
     feature = 0 + (255 - 0) / (max_ori - min_ori) * (feature - min_ori)
     feature = feature.astype('uint8')
     return feature
+
 
 def add_box_img(img, boxes, color=(0, 255, 0)):
     """
@@ -287,6 +290,7 @@ def add_box_img(img, boxes, color=(0, 255, 0)):
                             color, 2)
     return img
 
+
 def use_others_model(model):
     model_ = model['model']
     model_ = {k.replace('featureExtract', 'sharedFeatExtra'): v for k, v in model_.items()}
@@ -295,3 +299,69 @@ def use_others_model(model):
     model['model'] = model_
     return model
 
+
+def get_wh_from_img_path(img_whole_path_name):
+    img_gt_w, img_gt_h, img_img_w, img_img_h = float(
+        img_whole_path_name.split('/')[-1].split('_')[2]), \
+                                               float(img_whole_path_name.split('/')[
+                                                         -1].split('_')[4][1:]), \
+                                               float(img_whole_path_name.split('/')[
+                                                         -1].split('_')[7]), \
+                                               float(img_whole_path_name.split('/')[
+                                                         -1].split('_')[-1][:-4])
+    return img_gt_w, img_gt_h, img_img_w, img_img_h
+
+
+# def choose_inst_img_through_exm_img(exemplar_index, trk_frames):
+#     frame_range = Config.frame_range
+#     if Config.update_template:
+#         low_idx = max(0, exemplar_index - frame_range)
+#         high_idx = min(len(trk_frames), exemplar_index + frame_range + Config.his_window + 2)
+#     else:
+#         low_idx = max(0, exemplar_index - frame_range)
+#         high_idx = min(len(trk_frames), exemplar_index + frame_range)
+#     # 在low_idx 和 high_idx里去选择一个来作为instance img， 但是为了保证每一个都能平等的选择到，
+#     # 这里加入一个采样权重来达到这样的目的。
+#     weights = sample_weights(exemplar_index, low_idx, high_idx, Config.sample_type)
+#     instance_file_name = np.random.choice(trk_frames[low_idx:exemplar_index]
+#                                           + trk_frames[exemplar_index + 1:high_idx], p=weights)
+#     return instance_file_name
+def choose_inst_img_through_exm_img(exemplar_index, trk_frames):
+    frame_range = Config.frame_range
+    low_idx = max(0, exemplar_index - frame_range)
+    high_idx = min(len(trk_frames), exemplar_index + frame_range)
+    # 在low_idx 和 high_idx里去选择一个来作为instance img， 但是为了保证每一个都能平等的选择到，
+    # 这里加入一个采样权重来达到这样的目的。
+    weights = sample_weights(exemplar_index, low_idx, high_idx, Config.sample_type)
+    if Config.update_template:
+        start_index = np.random.choice(
+            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx)))[0:-Config.his_window],
+            p=weights)
+        instance_index = list(range(start_index, start_index + Config.his_window))
+    else:
+        instance_index = np.random.choice(
+            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx))),
+            p=weights)
+
+    return instance_index
+
+
+def sample_weights(center, low_idx, high_idx, sample_type='uniform'):
+    """
+     采样权重
+    """
+    if Config.update_template:
+        weights = list(range(low_idx, high_idx))
+        weights.remove(center)
+        weights = weights[0:-Config.his_window]
+    else:
+        weights = list(range(low_idx, high_idx))
+        weights.remove(center)
+    weights = np.array(weights)
+    if sample_type == 'linear':
+        weights = abs(weights - center)
+    if sample_type == 'sqrt':
+        weights = np.sqrt(abs(weights - center))
+    if sample_type == 'uniform':
+        weights = np.ones_like(weights)
+    return weights / sum(weights)
