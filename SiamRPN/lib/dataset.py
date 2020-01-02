@@ -80,8 +80,9 @@ class GetDataSet(Dataset):
                 continue
             # 选到模版图片 (511,511)
             exemplar_img = self.imread(exemplar_whole_path_name)
-            # 开始选instance_img 5张连续帧
+            # 开始选instance_img 6张连续帧的index
             instance_indexes = choose_inst_img_through_exm_img(exemplar_index, trk_frames)
+            # 读这6张图片的信息并存下
             for id in range(len(instance_indexes)):
                 instance_whole_path_name = glob(os.path.join(self.data_dir, sequence, trk_frames[instance_indexes[id]] +
                                                              ".{:02d}.patch*.jpg".format(trkid)))[0]
@@ -100,7 +101,8 @@ class GetDataSet(Dataset):
             instance_gt_w = instance_gt_ws[-1]
             instance_gt_h = instance_gt_hs[-1]
 
-            for img in instance_imgs:
+            # 模拟将之前的历史帧进行处理成127*127的模板
+            for img in instance_imgs[0:Config.his_window]:
                 # 进行图片随机色彩空间转换，一种数据增强
                 if np.random.rand(1) < Config.gray_ratio:  # 这里为什么要转了2次
                     img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)

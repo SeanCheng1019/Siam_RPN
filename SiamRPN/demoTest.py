@@ -197,4 +197,3 @@ class GetDataSet(Dataset):
     def __len__(self):
         return self.num
 
-    

@@ -30,6 +30,7 @@ class SiamRPNTracker(Tracker):
         self.transforms = transforms.Compose([
             ToTensor()
         ])
+        # 可以提前计算好响应图的尺寸大小，用来生成anchors
         valid_map_size = Config.valid_map_size
         self.anchors = generate_anchors(total_stride=Config.total_stride,
                                         base_size=Config.anchor_base_size,
@@ -46,6 +47,7 @@ class SiamRPNTracker(Tracker):
         :param bbox: left top corner, w, h
         :return:
         """
+        # change to [cx,cy,w,h]
         bbox = np.array([
             bbox[0] + bbox[2] / 2 - 0.5,
             bbox[1] + bbox[3] / 2 - 0.5,

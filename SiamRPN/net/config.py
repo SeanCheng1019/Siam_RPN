@@ -27,8 +27,8 @@ class Config:
     iou_neg_threshold = 0.3
     train_batch_size = 32
     valid_batch_size = 8
-    train_num_workers = 4
-    valid_num_workers = 4
+    train_num_workers = 0
+    valid_num_workers = 0
     log_dir = '../data/logs'
     train_ratio = 0.99
     seed = 6666
@@ -60,8 +60,8 @@ class Config:
     show_net_feature = True
     use_others = True
     memAlign = False
-    his_window = 5
+    his_window = 5  # 5张历史帧
     stmm_train_batch_size = 8
     stmm_valid_batch_size = 1
-    update_template = True
+    update_template = False
 

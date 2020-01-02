@@ -1,10 +1,12 @@
 import numpy as np
 from torch import nn
+import torch as t
 from net.config import Config
 import torch.nn.functional as F
 from net.config import Config
 from net.vgg16 import VGG16
 from net.stmm import STMM
+from net.alexnet import AlexNet
 from lib.viusal import visual
 from lib.util import norm_to_255
 
@@ -36,7 +38,17 @@ class SiameseAlexNet(nn.Module):
             nn.BatchNorm2d(256),
         )
         if Config.update_template:
-            self.vgg16 = VGG16()
+            # self.vgg16 = VGG16()
+            self.alexnet = AlexNet().cuda()
+            # load pretrained paramter
+            pretrained_checkpoint = t.load(Config.pretrained_model)
+            pretrained_checkpoint = \
+                {k.replace('features.features', 'sharedFeatExtra'): v for k, v in pretrained_checkpoint.items()}
+            model_dict = self.alexnet.state_dict()
+            model_dict.update(pretrained_checkpoint)
+            self.alexnet.load_state_dict(model_dict)
+            print("finish loading stmm_module's pre-trained model \n")
+            # stmm module
             self.stmm = STMM(8, Config.his_window, 512, 512, 1)
 
         self.anchor_num_per_position = Config.anchor_num
@@ -55,7 +67,7 @@ class SiameseAlexNet(nn.Module):
         :param template: torch.Size([48, 127, 127, 3]) 可正常传入图片 无重复
         :param detection:  torch.Size([8, 271, 271, 3]) 正常 不重复
         :param training:
-        :param his_frame:  当前帧加上之前4帧构成5帧大小的窗口
+        :param his_frame:  历史5帧
         :return:
         """
         N = template.size(0)
@@ -71,14 +83,12 @@ class SiameseAlexNet(nn.Module):
                                            template_wh, 3)
                 # detection = detection.view(Config.stmm_valid_batch_size, 3, detection_wh, detection_wh)
 
-
             template_stmm = \
                 templates[:, 0:Config.his_window, :, :, :].permute(0, 1, 4, 2, 3).contiguous().view(-1,
                                                                                                     3,
                                                                                                     Config.exemplar_size,
                                                                                                     Config.exemplar_size
                                                                                                     ).float()
-
 
             # template = template.view(-1, 3, Config.exemplar_size, Config.exemplar_size)
             # detection = detection.view(-1, 3, Config.instance_size, Config.instance_size)
@@ -88,7 +98,8 @@ class SiameseAlexNet(nn.Module):
         template_feature = self.sharedFeatExtra(template)
         detection_feature = self.sharedFeatExtra(detection)
         if Config.update_template:
-            his_template_feature = self.vgg16(template_stmm.cuda())  # shape:[N, 512, 6, 6]
+            # his_template_feature = self.vgg16(template_stmm.cuda())  # shape:[N, 512, 6, 6]
+            his_template_feature = self.alexnet(template_stmm.cuda())  # shape:[N, 512, 6, 6]
             his_mem = self.stmm(his_template_feature)
             update_mem_feature = his_mem[:, -1, :, :, :]  # shape:[N, 512, 6, 6]
             update_mem_feature = self.stmm_mem_adjust(update_mem_feature.cuda())
