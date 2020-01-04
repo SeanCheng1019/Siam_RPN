@@ -9,6 +9,7 @@ import torch as t
 from got10k.trackers import Tracker
 from lib.util import use_others_model
 
+
 class SiamRPNTracker(Tracker):
     def __init__(self, model_path):
         super(SiamRPNTracker, self).__init__(
@@ -40,6 +41,9 @@ class SiamRPNTracker(Tracker):
         hanning = np.hanning(valid_map_size)
         window = np.outer(hanning, hanning)
         self.window = np.tile(window.flatten(), Config.anchor_num)
+        self.frame_count = 0
+        if Config.update_template:
+            self.his_frame_pool = []
 
     def init(self, frame, bbox):
         """
@@ -61,10 +65,12 @@ class SiamRPNTracker(Tracker):
         self.img_mean = np.mean(frame, axis=(0, 1))
         frame = np.array(frame)
         exemplar_img, scale_ratio, _ = get_exemplar_img(frame, bbox, Config.exemplar_size,
-        Config.context_margin_amount, self.img_mean)
+                                                        Config.context_margin_amount, self.img_mean)
         exemplar_img = self.transforms(exemplar_img)[None, :, :, :]
+        if Config.update_template:
+            self.his_frame_pool.append(exemplar_img)
         self.model.track_init(exemplar_img.permute(0, 3, 1, 2).cuda())
-
+        self.frame_count += 1
 
     def update(self, frame):
         """
@@ -72,7 +78,16 @@ class SiamRPNTracker(Tracker):
         :return: bbox：[xmin, ymin, w, h]
         """
         frame = np.array(frame)
+        self.img_mean = np.mean(frame, axis=(0, 1))
         box = np.hstack([self.center_pos, self.target_sz])
+        if Config.update_template:
+            # 保存的历史帧溢出 （超过规定的窗口数量）
+            if self.his_frame_pool.__len__() > 5:
+                del (self.his_frame_pool[0])
+            if self.his_frame_pool.__len__() == 5:
+                # 更新模板 更新两个原先由第一帧固定的卷积核
+                self.model.track_update_template(his_templates=self.his_frame_pool)
+
         instance_img, _, _, scale_detection = get_instance_img(frame, box, Config.exemplar_size,
                                                                Config.instance_size, Config.context_margin_amount,
                                                                self.img_mean)
@@ -90,7 +105,7 @@ class SiamRPNTracker(Tracker):
         delta = pred_reg.cpu().detach().numpy().squeeze()
         pred_box = box_transform_use_reg_offset(self.anchors, delta).squeeze()
         pred_score = F.softmax(pred_cls.permute(
-                1, 2, 3, 0).contiguous().view(2, -1), dim=0).data[1].cpu().numpy()
+            1, 2, 3, 0).contiguous().view(2, -1), dim=0).data[1].cpu().numpy()
 
         # 以下内容在论文里4.3节中有解释
         def max_ratio(ratio):
@@ -105,7 +120,7 @@ class SiamRPNTracker(Tracker):
 
         # 惩罚和加窗
         s = max_ratio(overall_scale(pred_box[:, 2], pred_box[:, 3]) /
-                      # 乘以scale_detection的原因：pred_box是放缩后的图上预测出的box，而target_sz_w/h是原图的尺寸，两者要同步尺寸
+                      # 乘以scale_detection的原因：pred_box是放缩后的图上预测出的box，而target_sz_w、_h是原图的尺寸，两者要同步尺寸
                       (overall_scale(self.target_sz_w * scale_detection, self.target_sz_h * scale_detection)))
         r = max_ratio((self.target_sz_w / self.target_sz_h) / (pred_box[:, 2] / pred_box[:, 3]))
         penalty = np.exp(-(r * s - 1) * Config.penalty_k)  # 对大尺度的变化要惩罚，让其权重配小权重
@@ -130,13 +145,18 @@ class SiamRPNTracker(Tracker):
         self.center_pos = np.array([res_x, res_y])
         self.target_sz = np.array([res_w, res_h])
         bbox = np.array([res_x, res_y, res_w, res_h])
+        # 转换为left-top 来可视化画图
         box = np.array([
             np.clip(bbox[0] - bbox[2] / 2, 0, frame.shape[1]).astype(np.float64),
             np.clip(bbox[1] - bbox[3] / 2, 0, frame.shape[0]).astype(np.float64),
             np.clip(bbox[2], 10, frame.shape[1]).astype(np.float64),
             np.clip(bbox[3], 10, frame.shape[0]).astype(np.float64)
         ])
-
-
-        # return self.box, pred_score[highest_score_id]
+        if Config.update_template:
+            # 将历史帧裁剪后存到模板池中
+            croped_template, _, _ = get_exemplar_img(frame, bbox, Config.exemplar_size, Config.context_margin_amount,
+                                                     self.img_mean)
+            croped_template = self.transforms(croped_template)[None, :, :, :]
+            self.his_frame_pool.append(croped_template)
+            self.frame_count += 1
         return box

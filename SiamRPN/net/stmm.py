@@ -61,7 +61,7 @@ class STMM_cell(nn.Module):
         self.conv_z_u = nn.Conv2d(M, M, 3, 1, 1, bias=False)
         self.conv_r_w = nn.Conv2d(D, M, 3, 1, 1)
         self.conv_r_u = nn.Conv2d(M, M, 3, 1, 1, bias=False)
-
+        self.FeatureAlign = FeatureAlign(k=3)
     def forward(self, feat_input, prev_mem, prev_feat):
         """
         :param feat_input:
@@ -71,9 +71,10 @@ class STMM_cell(nn.Module):
         """
 
         if Config.memAlign:
-            mem0 = FeatureAlign(feat_input, prev_feat, prev_mem)
+            mem0 = self.FeatureAlign.forward(feat_input, prev_feat, prev_mem)
         else:
-            mem0 = feat_input + 0 * prev_mem
+            # 先随便设的参数
+            mem0 = 0.5 * feat_input + 0.5 * prev_mem
 
         #  特征对齐   (这里的relu是临时的，还需要改成和论文里一样的relu)
         z = t.relu(self.conv_z_w(feat_input) + self.conv_z_u(mem0))

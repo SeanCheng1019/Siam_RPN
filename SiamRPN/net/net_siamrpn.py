@@ -133,6 +133,28 @@ class SiameseAlexNet(nn.Module):
         self.kernel_cls = kernel_cls.reshape(-1, 256, 4, 4)
         self.kernel_reg = kernel_reg.reshape(-1, 256, 4, 4)
 
+    def track_update_template(self, his_templates):
+        """
+        :param his_templates : as list type  给定的输入是历史帧5张
+        :return: self.kernel_cls, self.kernel_reg
+        """
+        N = his_templates[0].size(0)
+        his_templates = [x.numpy() for x in his_templates]
+        his_templates = np.stack(his_templates).transpose(1, 0, 2, 3, 4)
+        his_templates = t.from_numpy(his_templates)
+        template_stmm = \
+            his_templates[0:Config.his_window, :, :, :].permute(0, 1, 4, 2, 3).contiguous().view(-1,
+                                                                                                3,
+                                                                                                Config.exemplar_size,
+                                                                                                Config.exemplar_size
+                                                                                                ).float()
+        his_template_feature = self.alexnet(template_stmm.cuda())  # shape:[5, 512, 6, 6]
+        his_mem = self.stmm(his_template_feature)
+        update_mem_feature = his_mem[:, -1, :, :, :]  # shape:[N, 512, 6, 6]
+        update_mem_feature = self.stmm_mem_adjust(update_mem_feature.cuda())
+        self.kernel_cls = self.conv_cls1(update_mem_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
+        self.kernel_reg = self.conv_reg1(update_mem_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
+
     def tracking(self, detection):
         N = detection.size(0)
         detection_feature = self.sharedFeatExtra(detection)

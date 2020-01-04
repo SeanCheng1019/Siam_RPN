@@ -33,12 +33,13 @@ def get_instance_img(img, bbox, size_z, size_x, context_margin_amount, img_mean=
     h_context = h + context_margin_amount * (w + h)
     # 还没缩放尺寸前的exemplar patch size， 是个正方形patch，但是尺寸还没缩放到127/255之类的
     size_original_exemplar = np.sqrt(w_context * h_context)
+    # 这个ratio是两个正方形图片块缩放的比例，缩放前是原图上裁剪出的一块正方形，缩放后是127*127的一块正方形。
     scale_ratio = size_z / size_original_exemplar
     size_original_instance = size_original_exemplar * (size_x / size_z)
     instance_img, scale_ratio_x = crop_and_pad(img, cx, cy, size_x, size_original_instance, img_mean)
     # 因为resize过，所以目标的尺寸要从原图乘上resize的ratio
-    w_instance = w * scale_ratio_x
-    h_instance = h * scale_ratio_x
+    w_instance = w * scale_ratio
+    h_instance = h * scale_ratio
     return instance_img, w_instance, h_instance, scale_ratio
 
 
@@ -85,7 +86,7 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
         if right_pad:
             tmp_img[:, im_w + left_pad:, :] = img_mean
         # 带了填充后的裁剪
-        img_patch_original = tmp_img[int(ymin):int(ymax + 1), int(xmin):int(xmax + 1), :]
+        img_patch_original = tmp_img[int(ymin):int(ymax + 1), int(xmin):int(xmax + 1), :]   # 尺寸有问题， w、h的长度不一样，多了1
     else:
         # 无填充的情况下，直接在原图上裁剪
         img_patch_original = img[int(ymin):int(ymax + 1), int(xmin):int(xmax + 1), :]
@@ -93,7 +94,7 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
         img_patch = cv2.resize(img_patch_original, (model_size, model_size))
     else:
         img_patch = img_patch_original
-    scale_ratio = model_size / img_patch_original.shape[0]
+    scale_ratio = model_size / img_patch_original.shape[0]   # 这里img_path_original的两个尺寸长度不一样
     return img_patch, scale_ratio
 
 
@@ -335,7 +336,8 @@ def choose_inst_img_through_exm_img(exemplar_index, trk_frames):
     weights = sample_weights(exemplar_index, low_idx, high_idx, Config.sample_type)
     if Config.update_template:
         start_index = np.random.choice(
-            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx)))[0:(-Config.his_window + 1)],
+            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx)))[
+            0:(-Config.his_window + 1)],
             p=weights)
         instance_index = list(range(start_index, start_index + Config.his_window + 1))
     else:
