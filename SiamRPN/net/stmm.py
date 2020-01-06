@@ -69,12 +69,12 @@ class STMM_cell(nn.Module):
         :param prev_feat:
         :return:
         """
-
+        mem0 = prev_mem
         if Config.memAlign:
             mem0 = self.FeatureAlign.forward(feat_input, prev_feat, prev_mem)
         else:
             # 先随便设的参数
-            mem0 = 0.5 * feat_input + 0.5 * prev_mem
+            feat_input = feat_input + 0 * prev_feat
 
         #  特征对齐   (这里的relu是临时的，还需要改成和论文里一样的relu)
         z = t.relu(self.conv_z_w(feat_input) + self.conv_z_u(mem0))

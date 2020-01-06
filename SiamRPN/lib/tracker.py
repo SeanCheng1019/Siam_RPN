@@ -82,8 +82,9 @@ class SiamRPNTracker(Tracker):
         box = np.hstack([self.center_pos, self.target_sz])
         if Config.update_template:
             # 保存的历史帧溢出 （超过规定的窗口数量）
-            if self.his_frame_pool.__len__() > 5:
+            if self.his_frame_pool.__len__() > 5 and self.his_frame_pool.__len__() == 5:
                 del (self.his_frame_pool[0])
+                self.frame_count = 5
             if self.his_frame_pool.__len__() == 5:
                 # 更新模板 更新两个原先由第一帧固定的卷积核
                 self.model.track_update_template(his_templates=self.his_frame_pool)

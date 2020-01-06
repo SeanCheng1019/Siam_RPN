@@ -128,6 +128,7 @@ class SiameseAlexNet(nn.Module):
         """
         N = template.size(0)
         template_feature = self.sharedFeatExtra(template)
+        self.first_template_feature = template_feature
         kernel_cls = self.conv_cls1(template_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
         kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
         self.kernel_cls = kernel_cls.reshape(-1, 256, 4, 4)
@@ -144,16 +145,21 @@ class SiameseAlexNet(nn.Module):
         his_templates = t.from_numpy(his_templates)
         template_stmm = \
             his_templates[0:Config.his_window, :, :, :].permute(0, 1, 4, 2, 3).contiguous().view(-1,
-                                                                                                3,
-                                                                                                Config.exemplar_size,
-                                                                                                Config.exemplar_size
-                                                                                                ).float()
+                                                                                                 3,
+                                                                                                 Config.exemplar_size,
+                                                                                                 Config.exemplar_size
+                                                                                                 ).float()
         his_template_feature = self.alexnet(template_stmm.cuda())  # shape:[5, 512, 6, 6]
         his_mem = self.stmm(his_template_feature)
         update_mem_feature = his_mem[:, -1, :, :, :]  # shape:[N, 512, 6, 6]
         update_mem_feature = self.stmm_mem_adjust(update_mem_feature.cuda())
-        self.kernel_cls = self.conv_cls1(update_mem_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
-        self.kernel_reg = self.conv_reg1(update_mem_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
+        # 历史5帧融合成的新模板特征，和第一帧的模板特征线性加权
+        new_template_feature = Config.template_combinition_coef * self.first_template_feature + (
+                    1 - Config.template_combinition_coef) * update_mem_feature
+        self.kernel_cls = self.conv_cls1(new_template_feature).view(N, 2 * self.anchor_num_per_position, 256, 4,
+                                                                  4).reshape(-1, 256, 4, 4)
+        self.kernel_reg = self.conv_reg1(new_template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4,
+                                                                  4).reshape(-1, 256, 4, 4)
 
     def tracking(self, detection):
         N = detection.size(0)

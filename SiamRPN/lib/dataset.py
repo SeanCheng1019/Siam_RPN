@@ -84,6 +84,9 @@ class GetDataSet(Dataset):
             instance_indexes = choose_inst_img_through_exm_img(exemplar_index, trk_frames)
             # 读这6张图片的信息并存下
             for id in range(len(instance_indexes)):
+                #a = instance_indexes[id]
+                #print(trk_frames.__len__(), a)
+                #b = trk_frames[a]
                 instance_whole_path_name = glob(os.path.join(self.data_dir, sequence, trk_frames[instance_indexes[id]] +
                                                              ".{:02d}.patch*.jpg".format(trkid)))[0]
                 instance_whole_path_names.append(instance_whole_path_name)

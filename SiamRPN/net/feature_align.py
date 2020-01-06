@@ -42,7 +42,8 @@ class FeatureAlign:
             self.output if self.output is not None else t.zeros_like(prev_mem).view(N, D, H, W)
         # self.masked_cpa = self.masked_cpa or t.zeros_like(prev_mem).view(N, H, W, H, W)  # masked_cur_prev_affinity
         self.masked_cpa = \
-            self.masked_cpa if self.masked_cpa is not None else t.zeros_like(t.Tensor(N, H, W, H, W))  # masked_cur_prev_affinity
+            self.masked_cpa if self.masked_cpa is not None else t.zeros_like(
+                t.Tensor(N, H, W, H, W))  # masked_cur_prev_affinity
         for idx in range(N):
             self.assemble(H, W, D, pad, cur_prev_affinity[idx],
                           prev_mem[idx].view(D, -1), self.output[idx].view(D, -1), self.masked_cpa[idx])
@@ -60,18 +61,21 @@ class FeatureAlign:
             mass = 0.
             for i in range(-pad, pad + 1):
                 for j in range(-pad, pad + 1):
-                    prev_y = y + j
+                    # 点(x,y)在prev_feat_map上的相邻点
                     prev_x = x + i
+                    prev_y = y + j
+                    # 　当是有效的相邻点时
                     if prev_y >= 0 and prev_y < H and prev_x >= 0 and prev_x < W:
                         flat_idx = int(y * W * HW + x * HW + prev_y * W + prev_x)
-                        coef = cur_prev_aff.view(-1)[flat_idx]
+                        coef = cur_prev_aff.view(-1)[flat_idx]  # 分母求和式子中的其中一个
                         if coef.cpu().detach().numpy() > 0:
-                            mass += coef
+                            mass += coef   # 求gamma_x,y(i,j)公式的分母
+
             val = 0.
             if mass > -bound and mass < bound:
                 flat_idx = y * W * HW + x * HW + y * W + x
                 feat_flat_idx = d * HW + y * W + x
-                val = prev_mem[feat_flat_idx]
+                val = prev_mem.view(-1)[feat_flat_idx]  # 未对齐的Mt-1
                 if d == 0:
                     # masked_cpa[flat_idx] += 1.0
                     pass
@@ -83,15 +87,15 @@ class FeatureAlign:
                             if prev_y >= 0 and prev_y < H and prev_x >= 0 and prev_x < W:
                                 # Update output
                                 flat_idx = y * W * HW + x * HW + prev_y * W + prev_x
-                                a = cur_prev_aff[flat_idx]
+                                a = cur_prev_aff.view(-1)[flat_idx]   # 求gamma_x,y(i,j)公式的分子
                                 if a > 0:
                                     a = a / mass
                                     feat_flat_idx = d * HW + prev_y * W + prev_x
-                                    fc = prev_mem[feat_flat_idx]
-                                    val += a * fc
+                                    fc = prev_mem.view(-1)[feat_flat_idx]  # Mt-1(x+i,y+j)
+                                    val += a * fc  # 求对齐的Mt-1
                                     # # Update gradient
                                     # if d == 0:  # The thread for the first dim is responsible for this
                                     #     masked_cpa[flat_idx] += a
                 # Get the right cell in the output
                 output_idx = d * HW + y * W + x
-                output[output_idx] = val
+                output.view(-1)[output_idx] = val

@@ -59,9 +59,10 @@ class Config:
     max_scale = 10
     show_net_feature = True
     use_others = False
-    memAlign = True
+    memAlign = False
     his_window = 5  # 5张历史帧
     stmm_train_batch_size = 8
     stmm_valid_batch_size = 1
-    update_template = True
+    update_template = False
+    template_combinition_coef = 0.6
 

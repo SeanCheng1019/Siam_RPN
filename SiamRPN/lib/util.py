@@ -336,8 +336,7 @@ def choose_inst_img_through_exm_img(exemplar_index, trk_frames):
     weights = sample_weights(exemplar_index, low_idx, high_idx, Config.sample_type)
     if Config.update_template:
         start_index = np.random.choice(
-            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx)))[
-            0:(-Config.his_window + 1)],
+            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx)))[0:(-Config.his_window - 1)],
             p=weights)
         instance_index = list(range(start_index, start_index + Config.his_window + 1))
     else:
@@ -355,7 +354,7 @@ def sample_weights(center, low_idx, high_idx, sample_type='uniform'):
     if Config.update_template:
         weights = list(range(low_idx, high_idx))
         weights.remove(center)
-        weights = weights[0:(-Config.his_window + 1)]
+        weights = weights[0:(-Config.his_window - 1)]
     else:
         weights = list(range(low_idx, high_idx))
         weights.remove(center)
