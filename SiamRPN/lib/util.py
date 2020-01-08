@@ -54,6 +54,15 @@ def get_exemplar_img(img, bbox, size_z, context_margin_amount, img_mean=None):
 
 
 def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None):
+    """
+    :param img:
+    :param cx:
+    :param cy:
+    :param model_size: 最终想要resize的尺寸
+    :param original_exemplar_size: 希望裁剪出来的patch尺寸
+    :param img_mean:
+    :return:
+    """
     im_h, im_w, im_c = img.shape
     xmin = cx - (original_exemplar_size - 1) / 2
     xmax = cx + (original_exemplar_size - 1) / 2
@@ -86,7 +95,7 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
         if right_pad:
             tmp_img[:, im_w + left_pad:, :] = img_mean
         # 带了填充后的裁剪
-        img_patch_original = tmp_img[int(ymin):int(ymax + 1), int(xmin):int(xmax + 1), :]   # 尺寸有问题， w、h的长度不一样，多了1
+        img_patch_original = tmp_img[int(ymin):int(ymax + 1), int(xmin):int(xmax + 1), :]  # 尺寸有问题， w、h的长度不一样，多了1
     else:
         # 无填充的情况下，直接在原图上裁剪
         img_patch_original = img[int(ymin):int(ymax + 1), int(xmin):int(xmax + 1), :]
@@ -94,7 +103,7 @@ def crop_and_pad(img, cx, cy, model_size, original_exemplar_size, img_mean=None)
         img_patch = cv2.resize(img_patch_original, (model_size, model_size))
     else:
         img_patch = img_patch_original
-    scale_ratio = model_size / img_patch_original.shape[0]   # 这里img_path_original的两个尺寸长度不一样
+    scale_ratio = model_size / img_patch_original.shape[0]  # 这里img_path_original的两个尺寸长度不一样
     return img_patch, scale_ratio
 
 
@@ -160,7 +169,7 @@ def box_transform_use_reg_offset(anchors, offsets):
                                                  offsets[:, 2:3], offsets[:, 3:]
     box_cx = anchor_w * offsets_x + anchor_cx
     box_cy = anchor_h * offsets_y + anchor_cy
-    box_w = anchor_w * np.exp(offsets_w)
+    box_w = anchor_w * np.exp(offsets_w)   # will occur 'overflow encountered in exp'
     box_h = anchor_h * np.exp(offsets_h)
     boxes = np.stack([box_cx, box_cy, box_w, box_h], axis=2)
     return boxes
@@ -244,8 +253,9 @@ def generate_anchors(total_stride, base_size, scales, ratios, score_map_size):
     shift = (score_map_size // 2) * total_stride
     xx, yy = np.meshgrid([-shift + total_stride * x for x in range(score_map_size)],
                          [-shift + total_stride * y for y in range(score_map_size)])
-    xx, yy = np.tile(xx, (anchor_num, 1)).flatten(), np.tile(yy, (anchor_num, 1)).flatten()
+    xx, yy = np.tile(xx.flatten(), (anchor_num, 1)).flatten(), np.tile(yy.flatten(), (anchor_num, 1)).flatten()
     anchor[:, 0], anchor[:, 1] = xx.astype(np.float32), yy.astype(np.float32)
+    print("finish generate anchors\n")
     return anchor
 
 
@@ -330,13 +340,14 @@ def get_wh_from_img_path(img_whole_path_name):
 def choose_inst_img_through_exm_img(exemplar_index, trk_frames):
     frame_range = Config.frame_range
     low_idx = max(0, exemplar_index - frame_range)
-    high_idx = min(len(trk_frames), exemplar_index + frame_range)
+    high_idx = min(len(trk_frames), exemplar_index + frame_range + 1)
     # 在low_idx 和 high_idx里去选择一个来作为instance img， 但是为了保证每一个都能平等的选择到，
     # 这里加入一个采样权重来达到这样的目的。
     weights = sample_weights(exemplar_index, low_idx, high_idx, Config.sample_type)
     if Config.update_template:
         start_index = np.random.choice(
-            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx)))[0:(-Config.his_window - 1)],
+            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx)))[
+            0:(-Config.his_window - 1)],
             p=weights)
         instance_index = list(range(start_index, start_index + Config.his_window + 1))
     else:
@@ -366,3 +377,17 @@ def sample_weights(center, low_idx, high_idx, sample_type='uniform'):
     if sample_type == 'uniform':
         weights = np.ones_like(weights)
     return weights / sum(weights)
+
+
+def normalization(data):
+    """
+    :param data:
+    :return: 归一化到（0,1）的数据
+    """
+    minVals = data.min().item()
+    maxVals = data.max().item()
+    ranges = maxVals - minVals
+    normData = np.zeros(np.shape(data))
+    normData = data - minVals
+    normData = normData / ranges
+    return normData

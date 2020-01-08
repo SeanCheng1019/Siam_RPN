@@ -162,12 +162,12 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                                                     training=True)
             pred_cls_score = pred_cls_score.reshape(-1, 2,
                                                     Config.anchor_num *
-                                                    Config.score_map_size *
-                                                    Config.score_map_size).permute(0, 2, 1)
+                                                    Config.train_map_size *
+                                                    Config.train_map_size).permute(0, 2, 1)
 
             pred_regression = pred_regression.reshape(-1, 4,
-                                                      Config.anchor_num * Config.score_map_size *
-                                                      Config.score_map_size).permute(0, 2, 1)
+                                                      Config.anchor_num * Config.train_map_size *
+                                                      Config.train_map_size).permute(0, 2, 1)
             cls_loss = rpn_cross_entropy_banlance(pred_cls_score, cls_label_map, Config.num_pos,
                                                   Config.num_neg, anchors,
                                                   ohem_pos=Config.ohem_pos, ohem_neg=Config.ohem_neg)
@@ -269,11 +269,11 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                                                     instance_his_imgs)
             pred_cls_score = pred_cls_score.reshape(-1, 2,
                                                     Config.anchor_num *
-                                                    Config.score_map_size *
-                                                    Config.score_map_size).permute(0, 2, 1)
+                                                    Config.train_map_size *
+                                                    Config.train_map_size).permute(0, 2, 1)
             pred_regression = pred_regression.reshape(-1, 4,
-                                                      Config.anchor_num * Config.score_map_size *
-                                                      Config.score_map_size).permute(0, 2, 1)
+                                                      Config.anchor_num * Config.train_map_size *
+                                                      Config.train_map_size).permute(0, 2, 1)
             cls_loss = rpn_cross_entropy_banlance(pred_cls_score, cls_label_map, Config.num_pos,
                                                   Config.num_neg, anchors, ohem_pos=Config.ohem_pos,
                                                   ohem_neg=Config.ohem_neg)
@@ -299,7 +299,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                 save_name = '../data/models/siamrpn_stmm_epoch_{}.pth'.format(epoch)
             else:
                 save_name = '../data/models/siamrpn_epoch_{}.pth'.format(epoch)
-            if t.cuda.device_count() > 1:
+            if t.cuda.device_count() > 1:  # remove 'module.'
                 new_state_dict = OrderedDict()
                 for k, v in model.state_dict().items():
                     new_state_dict[k] = v

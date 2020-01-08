@@ -3,7 +3,7 @@ import torch as t
 import torch.nn as nn
 import torch.nn.functional as F
 import random
-from lib.util import nms
+from lib.util import nms, normalization
 
 
 def rpn_cross_entropy(input, target):
@@ -20,8 +20,8 @@ def rpn_cross_entropy(input, target):
 
 def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_pos=None, ohem_neg=None):
     '''
-    :param input: (N, 15*15*5, 2)
-    :param target: (15*15*5, )
+    :param input: (N, 19*19*5, 2)
+    :param target: (N, 19*19*5, )
     :param num_pos:
     :param num_neg:
     :param anchors:
@@ -60,12 +60,14 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
                 pos_index_random = random.sample(pos_index.tolist(), min_pos)
                 # print("处理loss \n", pos_index_random, input[batch_id][pos_index_random].shape,
                 #       target[batch_id][pos_index_random].squeeze().shape, target[batch_id][pos_index_random].squeeze(), "\n")
-                # 为了处理cross_entropy的维度问题
+                # 为了处理cross_entropy的维度问题,出现在正样本个数只有1个情况下
                 if len(pos_index_random) == 1:
                     # print("处理1个的情况")
                     pos_loss_final = F.cross_entropy(input=input[batch_id][pos_index_random],
                                                      target=target[batch_id][pos_index_random[0]], reduction='none')
                 else:
+                    # 这里的交叉熵损失 先对每一个anchor的两个分数做softmax，即两个分数加起来和为1
+                    # 这里因为规定正样本标为1，负样本标为0，而“1”正好是第2列，所以朝着第二列是正样本分数的方向训练，所以第二列是看做正样本的分数。
                     pos_loss_final = F.cross_entropy(input=input[batch_id][pos_index_random],
                                                      target=target[batch_id][pos_index_random].squeeze(),
                                                      reduction='none')
@@ -95,6 +97,9 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
                 neg_index_random = random.sample(neg_index.tolist(), num_neg)
                 neg_loss_final = F.cross_entropy(input=input[batch_id][neg_index_random],
                                                  target=target[batch_id][neg_index_random].squeeze(), reduction='none')
+        # # 加loss归一化
+        # pos_loss_final = normalization(pos_loss_final)
+        # neg_loss_final = normalization(neg_loss_final)
         loss = (pos_loss_final.mean() + neg_loss_final.mean()) / 2
         loss_all.append(loss)
     final_loss = t.stack(loss_all).mean()

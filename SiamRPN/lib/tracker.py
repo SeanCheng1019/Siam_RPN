@@ -99,7 +99,7 @@ class SiamRPNTracker(Tracker):
         #                                                                                                        2,
         #                                                                                                        1)
         pred_reg = pred_reg.reshape(-1, 4,
-                                    Config.anchor_num * Config.score_map_size * Config.score_map_size).permute(0,
+                                    Config.anchor_num * Config.valid_map_size * Config.valid_map_size).permute(0,
                                                                                                                2,
                                                                                                                1)
         # 预测的dx,dy,dw,dh

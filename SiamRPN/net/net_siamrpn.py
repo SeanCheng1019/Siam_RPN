@@ -119,7 +119,7 @@ class SiameseAlexNet(nn.Module):
         pred_cls = F.conv2d(conv_cls, kernel_cls, groups=N)
         pred_reg = F.conv2d(conv_reg, kernel_reg, groups=N)
         pred_reg = self.regress_adjust(pred_reg.reshape(N, 4 * self.anchor_num_per_position,
-                                                        19, 19))
+                                                        Config.train_map_size, Config.train_map_size))
         return pred_cls, pred_reg
 
     def track_init(self, template):
@@ -173,5 +173,5 @@ class SiameseAlexNet(nn.Module):
         pred_cls = F.conv2d(conv_cls, self.kernel_cls, groups=N)
         pred_reg = F.conv2d(conv_reg, self.kernel_reg, groups=N)
         pred_reg = self.regress_adjust(pred_reg.reshape(N, 4 * self.anchor_num_per_position,
-                                                        19, 19))
+                                                        Config.valid_map_size, Config.valid_map_size))
         return pred_cls, pred_reg

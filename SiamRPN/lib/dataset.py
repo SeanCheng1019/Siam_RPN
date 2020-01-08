@@ -25,29 +25,26 @@ class GetDataSet(Dataset):
         self.meta_data = meta_data
         # 初始化的时候，把在一个序列里只出现2帧以内的目标筛除掉。
         self.meta_data = {x[0]: x[1] for x in meta_data}
-        # 训练模式都是从一个序列中成对成对的去选的
-        self.num = len(sequence_names) if not training else \
-            Config.pairs_per_sequence_per_epoch * len(sequence_names)
+        # 训练模式都是从一个序列中成对成对的去选的,在训练中，一个序列要选两对图片,用这个num来改变__len__()函数来达到每个序列会被选到2次的目的。
+        self.num = len(self.sequence_names) if not training else \
+            Config.pairs_per_sequence_per_epoch * len(self.sequence_names)
         for track_sequence_name in self.meta_data.keys():
             track_sequence_info = self.meta_data[track_sequence_name]
             for object_id in list(track_sequence_info.keys()):
-                if len(track_sequence_info[object_id]) < Config.his_window + 3:
+                if len(track_sequence_info[object_id]) < Config.his_window + 2:
                     del track_sequence_info[object_id]
         self.training = training
-        self.max_stretch = Config.scale_resize  # 干啥用
+        self.max_stretch = Config.scale_resize  # 最后对instance_img的缩放处理 数据增强
         self.max_shift = Config.max_shift
         self.center_crop_size = Config.exemplar_size  # 裁剪模版用的尺寸
-        self.random_crop_size = Config.instance_size  # 裁剪搜索区域用的尺寸
+        self.random_crop_size = Config.instance_size_train  # 裁剪搜索区域用的尺寸
         self.anchors = generate_anchors(Config.total_stride, Config.anchor_base_size, Config.anchor_scales,
-                                        Config.anchor_ratio, Config.score_map_size)
+                                        Config.anchor_ratio, Config.train_map_size)
         self.choosed_idx = []
 
-    def __getitem__(self, idx):  # 何时调用的，何时传入的index参数
-        all_idx = np.arange(self.num)
-        np.random.shuffle(all_idx)
-
-        # 先选一个序列，然后序列里选个目标，然后选择一帧。
-        for index in all_idx:
+    def __getitem__(self, index):  # 何时调用的，何时传入的index参数
+        for index in list([index]):
+            # 先选一个序列，然后序列里选个目标，然后选择一帧。
             index = index % len(self.sequence_names)
             self.choosed_idx.append(index)  # 记录看看选中了哪些序列
             sequence = self.sequence_names[index]
@@ -65,7 +62,6 @@ class GetDataSet(Dataset):
             instance_img_ws = []
             instance_img_hs = []
             # 选择图片
-
             exemplar_index = np.random.choice(list(range(len(trk_frames))))
             exemplar_whole_path_name = glob(os.path.join(self.data_dir, sequence, trk_frames[exemplar_index] +
                                                          ".{:02d}.patch*.jpg".format(trkid)))[0]
@@ -82,6 +78,8 @@ class GetDataSet(Dataset):
             exemplar_img = self.imread(exemplar_whole_path_name)
             # 开始选instance_img 6张连续帧的index
             instance_indexes = choose_inst_img_through_exm_img(exemplar_index, trk_frames)
+            if not isinstance(instance_indexes, list):
+                instance_indexes = list([instance_indexes])
             # 读这6张图片的信息并存下
             for id in range(len(instance_indexes)):
                 #a = instance_indexes[id]
@@ -103,30 +101,31 @@ class GetDataSet(Dataset):
             instance_img = instance_imgs[-1]
             instance_gt_w = instance_gt_ws[-1]
             instance_gt_h = instance_gt_hs[-1]
-
-            # 模拟将之前的历史帧进行处理成127*127的模板
-            for img in instance_imgs[0:Config.his_window]:
-                # 进行图片随机色彩空间转换，一种数据增强
-                if np.random.rand(1) < Config.gray_ratio:  # 这里为什么要转了2次
-                    img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-
-                    img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
-                img, _ = crop_and_pad(img, (img.shape[0] - 1) / 2,
-                                      (img.shape[1] - 1) / 2, self.center_crop_size,
-                                      self.center_crop_size)
-                instance_his_imgs.append(img)
+            if Config.update_template:
+                # 模拟将之前的历史帧进行处理成127*127的模板
+                for img in instance_imgs[0:Config.his_window]:
+                    # 进行图片随机色彩空间转换，一种数据增强
+                    if np.random.rand(1) < Config.gray_ratio:  # 这里为什么要转了2次
+                        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+                    img, _ = crop_and_pad(img, (img.shape[0] - 1) / 2,
+                                          (img.shape[1] - 1) / 2, self.center_crop_size,
+                                          self.center_crop_size)
+                    instance_his_imgs.append(img)
             # exemplar_img的数据增强
             if np.random.rand(1) < Config.gray_ratio:
                 exemplar_img = cv2.cvtColor(exemplar_img, cv2.COLOR_RGB2GRAY)
                 exemplar_img = cv2.cvtColor(exemplar_img, cv2.COLOR_GRAY2RGB)
+                instance_img = cv2.cvtColor(instance_img, cv2.COLOR_RGB2GRAY)
+                instance_img = cv2.cvtColor(instance_img, cv2.COLOR_GRAY2RGB)
             if Config.exemplar_stretch:
                 # 再次缩放尺寸
                 exemplar_img, exemplar_gt_w, exemplar_gt_h = self.randomStretch(exemplar_img,
                                                                                 exemplar_gt_w,
                                                                                 exemplar_gt_h)
             # 若有放缩的操作后，要保证尺寸要回到规定的尺寸
-            exemplar_img, _ = crop_and_pad(exemplar_img, (exemplar_img.shape[0] - 1) / 2,
-                                           (exemplar_img.shape[1] - 1) / 2, self.center_crop_size,
+            exemplar_img, _ = crop_and_pad(exemplar_img, (exemplar_img.shape[1] - 1) / 2,
+                                           (exemplar_img.shape[0] - 1) / 2, self.center_crop_size,
                                            self.center_crop_size)
             exemplar_img = self.z_transforms(exemplar_img)
 
@@ -191,7 +190,7 @@ class GetDataSet(Dataset):
                 cls_label_map 1805,1
         """
         regression_target = box_delta_in_gt_anchor(anchors, box)
-        anchors_iou = compute_iou(anchors, box)
+        anchors_iou = compute_iou(anchors, box).flatten()
         pos_index = np.where(anchors_iou > Config.iou_pos_threshold)[0]
         neg_index = np.where(anchors_iou < Config.iou_neg_threshold)[0]
         cls_label_map = np.ones_like(anchors_iou) * -1
