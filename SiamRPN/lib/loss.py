@@ -63,8 +63,16 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
                 # 为了处理cross_entropy的维度问题,出现在正样本个数只有1个情况下
                 if len(pos_index_random) == 1:
                     # print("处理1个的情况")
+                    print(pos_index_random, "\n")
+                    print(batch_id, "\n")
+                    print(target.shape, "\n")
+                    print(pos_index_random[0])
+                    print("size: ", input[batch_id][pos_index_random].shape,
+                          target[batch_id][pos_index_random[0]].shape)
+
+                    print(target[batch_id][pos_index_random[0]].unsqueeze(0).shape)
                     pos_loss_final = F.cross_entropy(input=input[batch_id][pos_index_random],
-                                                     target=target[batch_id][pos_index_random[0]], reduction='none')
+                                                     target=target[batch_id][pos_index_random[0]].unsqueeze(0), reduction='none')
                 else:
                     # 这里的交叉熵损失 先对每一个anchor的两个分数做softmax，即两个分数加起来和为1
                     # 这里因为规定正样本标为1，负样本标为0，而“1”正好是第2列，所以朝着第二列是正样本分数的方向训练，所以第二列是看做正样本的分数。

@@ -26,7 +26,7 @@ class Config:
     exemplar_stretch = False
     iou_pos_threshold = 0.6
     iou_neg_threshold = 0.3
-    train_batch_size = 32
+    train_batch_size = 16
     valid_batch_size = 8
     train_num_workers = 4
     valid_num_workers = 4
@@ -48,14 +48,14 @@ class Config:
     ohem_pos = False
     ohem_neg = False
     ohem_reg = False
-    lamb = 5
+    lamb = 1
     clip = 10
     show_interval = 3
     save_interval = 1
     show_topK = 1
-    penalty_k = 0.04
-    window_influence = 0.44
-    track_lr = 0.4
+    penalty_k = 0.055
+    window_influence = 0.42
+    track_lr = 0.295
     min_scale = 0.1
     max_scale = 10
     show_net_feature = True

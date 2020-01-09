@@ -31,16 +31,6 @@ class SiamRPNTracker(Tracker):
         self.transforms = transforms.Compose([
             ToTensor()
         ])
-        # 可以提前计算好响应图的尺寸大小，用来生成anchors
-        valid_map_size = Config.valid_map_size
-        self.anchors = generate_anchors(total_stride=Config.total_stride,
-                                        base_size=Config.anchor_base_size,
-                                        scales=Config.anchor_scales,
-                                        ratios=Config.anchor_ratio,
-                                        score_map_size=valid_map_size)
-        hanning = np.hanning(valid_map_size)
-        window = np.outer(hanning, hanning)
-        self.window = np.tile(window.flatten(), Config.anchor_num)
         self.frame_count = 0
         if Config.update_template:
             self.his_frame_pool = []
@@ -51,6 +41,7 @@ class SiamRPNTracker(Tracker):
         :param bbox: left top corner, w, h
         :return:
         """
+        frame = np.array(frame)
         # change to [cx,cy,w,h]
         bbox = np.array([
             bbox[0] + bbox[2] / 2 - 0.5,
@@ -60,10 +51,24 @@ class SiamRPNTracker(Tracker):
         )
         self.center_pos = bbox[:2]
         self.target_sz = bbox[2:]
+        replace = False
+        # for small target, use larger search region
+        if np.prod(self.target_sz) / np.prod(frame.shape[:2]) < 0.004:
+            replace = True
+        # 可以提前计算好响应图的尺寸大小，用来生成anchors
+        self.instance_size = Config.instance_size if not replace else 287
+        self.valid_map_size = int((self.instance_size - Config.exemplar_size) / Config.total_stride) + 1
+        self.anchors = generate_anchors(total_stride=Config.total_stride,
+                                        base_size=Config.anchor_base_size,
+                                        scales=Config.anchor_scales,
+                                        ratios=Config.anchor_ratio,
+                                        score_map_size=self.valid_map_size)
+        hanning = np.hanning(self.valid_map_size)
+        window = np.outer(hanning, hanning)
+        self.window = np.tile(window.flatten(), Config.anchor_num)
         self.target_sz_w, self.target_sz_h = bbox[2], bbox[3]
         self.origin_target_sz = np.array([bbox[2], bbox[3]])  # w, h
         self.img_mean = np.mean(frame, axis=(0, 1))
-        frame = np.array(frame)
         exemplar_img, scale_ratio, _ = get_exemplar_img(frame, bbox, Config.exemplar_size,
                                                         Config.context_margin_amount, self.img_mean)
         exemplar_img = self.transforms(exemplar_img)[None, :, :, :]
@@ -90,7 +95,7 @@ class SiamRPNTracker(Tracker):
                 self.model.track_update_template(his_templates=self.his_frame_pool)
 
         instance_img, _, _, scale_detection = get_instance_img(frame, box, Config.exemplar_size,
-                                                               Config.instance_size, Config.context_margin_amount,
+                                                               self.instance_size, Config.context_margin_amount,
                                                                self.img_mean)
         instance_img = self.transforms(instance_img)[None, :, :, :]
         pred_cls, pred_reg = self.model.tracking(detection=instance_img.permute(0, 3, 1, 2).cuda())
@@ -99,9 +104,9 @@ class SiamRPNTracker(Tracker):
         #                                                                                                        2,
         #                                                                                                        1)
         pred_reg = pred_reg.reshape(-1, 4,
-                                    Config.anchor_num * Config.valid_map_size * Config.valid_map_size).permute(0,
-                                                                                                               2,
-                                                                                                               1)
+                                    Config.anchor_num * self.valid_map_size * self.valid_map_size).permute(0,
+                                                                                                           2,
+                                                                                                           1)
         # 预测的dx,dy,dw,dh
         delta = pred_reg.cpu().detach().numpy().squeeze()
         pred_box = box_transform_use_reg_offset(self.anchors, delta).squeeze()
@@ -130,7 +135,7 @@ class SiamRPNTracker(Tracker):
                      self.window * Config.window_influence  # 加余弦窗
         highest_score_id = np.argmax(pred_score)
         target = pred_box[highest_score_id, :] / scale_detection  # 返回原图要用原来的尺寸
-        lr = penalty[highest_score_id] * pred_score[highest_score_id] * Config.track_lr
+        lr = pred_score[highest_score_id] * Config.track_lr
         # 预测的x，y都是相对于中心点的相对位移
         # clip boundary  （准备用一个clip函数统一处理来替代下面步骤）
         # smooth bbox ，不是完全使用预测出来的新bbox，而是有个平滑的变化，类似于在之前长度上的一个增量。
@@ -144,6 +149,8 @@ class SiamRPNTracker(Tracker):
                         Config.max_scale * self.origin_target_sz[1])
         # update state
         self.center_pos = np.array([res_x, res_y])
+        self.target_sz_w = res_w
+        self.target_sz_h = res_h
         self.target_sz = np.array([res_w, res_h])
         bbox = np.array([res_x, res_y, res_w, res_h])
         # 转换为left-top 来可视化画图

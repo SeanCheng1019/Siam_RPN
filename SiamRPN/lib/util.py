@@ -255,7 +255,7 @@ def generate_anchors(total_stride, base_size, scales, ratios, score_map_size):
                          [-shift + total_stride * y for y in range(score_map_size)])
     xx, yy = np.tile(xx.flatten(), (anchor_num, 1)).flatten(), np.tile(yy.flatten(), (anchor_num, 1)).flatten()
     anchor[:, 0], anchor[:, 1] = xx.astype(np.float32), yy.astype(np.float32)
-    print("finish generate anchors\n")
+    # print("finish generate anchors\n")
     return anchor
 
 

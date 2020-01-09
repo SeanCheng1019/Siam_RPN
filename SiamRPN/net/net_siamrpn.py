@@ -172,6 +172,7 @@ class SiameseAlexNet(nn.Module):
         conv_reg = conv_reg.reshape(1, -1, reg_map_size, reg_map_size)
         pred_cls = F.conv2d(conv_cls, self.kernel_cls, groups=N)
         pred_reg = F.conv2d(conv_reg, self.kernel_reg, groups=N)
+        map_size = pred_reg.size()[-1]
         pred_reg = self.regress_adjust(pred_reg.reshape(N, 4 * self.anchor_num_per_position,
-                                                        Config.valid_map_size, Config.valid_map_size))
+                                                        map_size, map_size))
         return pred_cls, pred_reg

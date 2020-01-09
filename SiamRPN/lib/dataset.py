@@ -43,7 +43,10 @@ class GetDataSet(Dataset):
         self.choosed_idx = []
 
     def __getitem__(self, index):  # 何时调用的，何时传入的index参数
-        for index in list([index]):
+        all_idx = np.arange(self.num)
+        np.random.shuffle(all_idx)
+        all_idx = np.insert(all_idx, 0, index, 0)
+        for index in all_idx:
             # 先选一个序列，然后序列里选个目标，然后选择一帧。
             index = index % len(self.sequence_names)
             self.choosed_idx.append(index)  # 记录看看选中了哪些序列
