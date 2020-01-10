@@ -4,7 +4,7 @@ import torch as t
 import numpy as np
 
 
-class FeatureAlign:
+class FeatureAlign(nn.Module):
     def __init__(self, k):
         super(FeatureAlign, self).__init__()
         assert k % 2 == 1, "k must be a odd number"

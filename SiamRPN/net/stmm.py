@@ -3,6 +3,7 @@ from net.config import Config
 import torch as t
 from torch.autograd import Variable
 from net.feature_align import FeatureAlign
+from lib.add_linear_scale import AddLinearScale
 import numpy as np
 
 
@@ -22,7 +23,12 @@ class STMM(nn.Module):
         self.D = D
         self.M = M
         self.MULT = MULT or 1
-        cell = STMM_cell(D, M)
+        self.AddLinearScale = AddLinearScale(Config.std_multiplier)
+        if Config.memAlign:
+            self.FeatureAlign = FeatureAlign(k=3)
+            cell = STMM_cell(D, M, self.AddLinearScale, self.FeatureAlign)
+        else:
+            cell = STMM_cell(D, M, self.AddLinearScale)
         self.cell = cell
 
     def forward(self, x, mem=None):
@@ -53,7 +59,7 @@ class STMM(nn.Module):
 
 
 class STMM_cell(nn.Module):
-    def __init__(self, D, M):
+    def __init__(self, D, M, addLinearScale, featureAlign=None):
         super().__init__()
         self.conv_w = nn.Conv2d(D, M, 3, 1, 1)
         self.conv_u = nn.Conv2d(M, M, 3, 1, 1, bias=False)
@@ -61,7 +67,9 @@ class STMM_cell(nn.Module):
         self.conv_z_u = nn.Conv2d(M, M, 3, 1, 1, bias=False)
         self.conv_r_w = nn.Conv2d(D, M, 3, 1, 1)
         self.conv_r_u = nn.Conv2d(M, M, 3, 1, 1, bias=False)
-        self.FeatureAlign = FeatureAlign(k=3)
+        self.FeatureAlign = featureAlign
+        self.AddLinearScale = addLinearScale
+
     def forward(self, feat_input, prev_mem, prev_feat):
         """
         :param feat_input:
@@ -70,16 +78,16 @@ class STMM_cell(nn.Module):
         :return:
         """
         mem0 = prev_mem
+        #  特征对齐
         if Config.memAlign:
-            mem0 = self.FeatureAlign.forward(feat_input, prev_feat, prev_mem)
+            mem0 = self.FeatureAlign(feat_input, prev_feat, prev_mem)
         else:
             # 先随便设的参数
-            feat_input = feat_input + 0 * prev_feat
+            feat_input = 0.5 * feat_input + 0.5 * prev_feat
 
-        #  特征对齐   (这里的relu是临时的，还需要改成和论文里一样的relu)
-        z = t.relu(self.conv_z_w(feat_input) + self.conv_z_u(mem0))
-        r = t.relu(self.conv_r_w(feat_input) + self.conv_r_u(mem0))
+        #  (这里的relu是临时的，还需要改成和论文里一样的relu)
+        z = self.AddLinearScale(t.relu(self.conv_z_w(feat_input) + self.conv_z_u(mem0)))
+        r = self.AddLinearScale(t.relu(self.conv_r_w(feat_input) + self.conv_r_u(mem0)))
         mem_ = t.relu(self.conv_w(feat_input) + self.conv_u(r * mem0))
         mem = (1 - z) * mem0 + z * mem_
-
         return mem, z, r

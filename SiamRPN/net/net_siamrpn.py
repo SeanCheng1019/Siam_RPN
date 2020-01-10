@@ -40,7 +40,7 @@ class SiameseAlexNet(nn.Module):
         if Config.update_template:
             # self.vgg16 = VGG16()
             self.alexnet = AlexNet().cuda()
-            # load pretrained paramter
+            # load pretrained paramter to stmm module
             pretrained_checkpoint = t.load(Config.pretrained_model)
             pretrained_checkpoint = \
                 {k.replace('features.features', 'sharedFeatExtra'): v for k, v in pretrained_checkpoint.items()}
@@ -103,6 +103,9 @@ class SiameseAlexNet(nn.Module):
             his_mem = self.stmm(his_template_feature)
             update_mem_feature = his_mem[:, -1, :, :, :]  # shape:[N, 512, 6, 6]
             update_mem_feature = self.stmm_mem_adjust(update_mem_feature.cuda())
+            # 历史5帧融合成的新模板特征，和第一帧的模板特征线性加权
+            update_mem_feature = Config.template_combinition_coef * template_feature + (
+                    1 - Config.template_combinition_coef) * update_mem_feature
             kernel_cls = self.conv_cls1(update_mem_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
             kernel_reg = self.conv_reg1(update_mem_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
         else:

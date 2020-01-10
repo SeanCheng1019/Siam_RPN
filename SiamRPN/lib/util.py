@@ -345,9 +345,9 @@ def choose_inst_img_through_exm_img(exemplar_index, trk_frames):
     # 这里加入一个采样权重来达到这样的目的。
     weights = sample_weights(exemplar_index, low_idx, high_idx, Config.sample_type)
     if Config.update_template:
+        # print((list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx))).__len__())
         start_index = np.random.choice(
-            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx)))[
-            0:(-Config.his_window - 1)],
+            (list(range(low_idx, exemplar_index)) + list(range(exemplar_index + 1, high_idx)))[0:(-Config.his_window - 1)],
             p=weights)
         instance_index = list(range(start_index, start_index + Config.his_window + 1))
     else:

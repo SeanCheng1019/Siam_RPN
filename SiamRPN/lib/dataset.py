@@ -31,7 +31,7 @@ class GetDataSet(Dataset):
         for track_sequence_name in self.meta_data.keys():
             track_sequence_info = self.meta_data[track_sequence_name]
             for object_id in list(track_sequence_info.keys()):
-                if len(track_sequence_info[object_id]) < Config.his_window + 2:
+                if len(track_sequence_info[object_id]) < Config.his_window + 3:
                     del track_sequence_info[object_id]
         self.training = training
         self.max_stretch = Config.scale_resize  # 最后对instance_img的缩放处理 数据增强

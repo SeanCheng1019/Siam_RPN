@@ -63,14 +63,14 @@ def rpn_cross_entropy_banlance(input, target, num_pos, num_neg, anchors, ohem_po
                 # 为了处理cross_entropy的维度问题,出现在正样本个数只有1个情况下
                 if len(pos_index_random) == 1:
                     # print("处理1个的情况")
-                    print(pos_index_random, "\n")
-                    print(batch_id, "\n")
-                    print(target.shape, "\n")
-                    print(pos_index_random[0])
-                    print("size: ", input[batch_id][pos_index_random].shape,
-                          target[batch_id][pos_index_random[0]].shape)
-
-                    print(target[batch_id][pos_index_random[0]].unsqueeze(0).shape)
+                    # print(pos_index_random, "\n")
+                    # print(batch_id, "\n")
+                    # print(target.shape, "\n")
+                    # print(pos_index_random[0])
+                    # print("size: ", input[batch_id][pos_index_random].shape,
+                    #       target[batch_id][pos_index_random[0]].shape)
+                    #
+                    # print(target[batch_id][pos_index_random[0]].unsqueeze(0).shape)
                     pos_loss_final = F.cross_entropy(input=input[batch_id][pos_index_random],
                                                      target=target[batch_id][pos_index_random[0]].unsqueeze(0), reduction='none')
                 else:

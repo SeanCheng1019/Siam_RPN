@@ -48,7 +48,7 @@ class Config:
     ohem_pos = False
     ohem_neg = False
     ohem_reg = False
-    lamb = 1
+    lamb = 5
     clip = 10
     show_interval = 3
     save_interval = 1
@@ -58,12 +58,12 @@ class Config:
     track_lr = 0.295
     min_scale = 0.1
     max_scale = 10
-    show_net_feature = True
+    show_net_feature = False
     use_others = False
     memAlign = False
     his_window = 5  # 5张历史帧
     stmm_train_batch_size = 8
     stmm_valid_batch_size = 1
-    update_template = False
-    template_combinition_coef = 0.6
-
+    update_template = True
+    template_combinition_coef = 0.7
+    std_multiplier = 3
