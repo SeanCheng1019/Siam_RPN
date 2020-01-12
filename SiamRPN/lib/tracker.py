@@ -72,10 +72,10 @@ class SiamRPNTracker(Tracker):
         exemplar_img, scale_ratio, _ = get_exemplar_img(frame, bbox, Config.exemplar_size,
                                                         Config.context_margin_amount, self.img_mean)
         exemplar_img = self.transforms(exemplar_img)[None, :, :, :]
-        if Config.update_template:
-            self.his_frame_pool.append(exemplar_img)
+        # if Config.update_template:
+        #     self.his_frame_pool.append(exemplar_img)
         self.model.track_init(exemplar_img.permute(0, 3, 1, 2).cuda())
-        self.frame_count += 1
+        # self.frame_count += 1
 
     def update(self, frame):
         """
