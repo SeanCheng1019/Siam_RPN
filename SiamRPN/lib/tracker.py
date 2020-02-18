@@ -8,7 +8,8 @@ import torch.nn.functional as F
 import torch as t
 from got10k.trackers import Tracker
 from lib.util import use_others_model
-
+import cv2
+#from bin.network import SiameseAlexNet
 
 class SiamRPNTracker(Tracker):
     def __init__(self, model_path):
@@ -32,6 +33,7 @@ class SiamRPNTracker(Tracker):
             ToTensor()
         ])
         self.frame_count = 0
+        self.template_save_num_count = 0
         if Config.update_template:
             self.his_frame_pool = []
 
@@ -42,6 +44,7 @@ class SiamRPNTracker(Tracker):
         :return:
         """
         frame = np.array(frame)
+
         # change to [cx,cy,w,h]
         bbox = np.array([
             bbox[0] + bbox[2] / 2 - 0.5,
@@ -71,11 +74,17 @@ class SiamRPNTracker(Tracker):
         self.img_mean = np.mean(frame, axis=(0, 1))
         exemplar_img, scale_ratio, _ = get_exemplar_img(frame, bbox, Config.exemplar_size,
                                                         Config.context_margin_amount, self.img_mean)
+        # save exemplar image to the disk for observe
+        f_name = "/media/csy/62ac73e0-814c-4dba-b59d-676690aca14b/experiments pictures/siamrpn_templates/{}.jpeg".format(self.template_save_num_count)
+        self.template_save_num_count += 1
+        cv2.imwrite(f_name, exemplar_img)
+
         exemplar_img = self.transforms(exemplar_img)[None, :, :, :]
-        # if Config.update_template:
-        #     self.his_frame_pool.append(exemplar_img)
+        if Config.update_template:
+            self.frame_count += 1
+            # self.his_frame_pool.append(exemplar_img)
         self.model.track_init(exemplar_img.permute(0, 3, 1, 2).cuda())
-        # self.frame_count += 1
+
 
     def update(self, frame):
         """
@@ -86,14 +95,16 @@ class SiamRPNTracker(Tracker):
         self.img_mean = np.mean(frame, axis=(0, 1))
         box = np.hstack([self.center_pos, self.target_sz])
         if Config.update_template:
-            # 保存的历史帧溢出 （超过规定的窗口数量）
+            # 保存的历史帧溢出 （超过规定的窗口数量） 始终保存最新的5帧
             if self.his_frame_pool.__len__() > 5:
                 del (self.his_frame_pool[0])
-                self.frame_count = 5
+                # self.frame_count = 5
             if self.his_frame_pool.__len__() == 5:
                 # 更新模板 更新两个原先由第一帧固定的卷积核
                 # print("更新模板\n")
-                self.model.track_update_template(his_templates=self.his_frame_pool)
+                # 隔五帧更新
+                if (self.frame_count - 1) % 5 == 0 and self.frame_count != 1:
+                    self.model.track_update_template(his_templates=self.his_frame_pool)
 
         instance_img, _, _, scale_detection = get_instance_img(frame, box, Config.exemplar_size,
                                                                self.instance_size, Config.context_margin_amount,
@@ -165,6 +176,11 @@ class SiamRPNTracker(Tracker):
             # 将历史帧裁剪后存到模板池中
             croped_template, _, _ = get_exemplar_img(frame, bbox, Config.exemplar_size, Config.context_margin_amount,
                                                      self.img_mean)
+            # save history template image to the disk for observe
+            f_name = "/media/csy/62ac73e0-814c-4dba-b59d-676690aca14b/experiments pictures/siamrpn_templates/{}.jpeg".format(
+                self.template_save_num_count)
+            self.template_save_num_count += 1
+            cv2.imwrite(f_name, croped_template)
             croped_template = self.transforms(croped_template)[None, :, :, :]
             self.his_frame_pool.append(croped_template)
             self.frame_count += 1

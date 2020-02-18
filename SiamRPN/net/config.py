@@ -5,7 +5,7 @@ class Config:
     instance_size = 271
     instance_size_train = 255
     exemplar_size = 127
-    instance_crop_size = 511
+    instance_crop_size = 500
     context_margin_amount = 0.5
     total_stride = 8
     valid_map_size = int((instance_size - exemplar_size) / total_stride) + 1
@@ -26,7 +26,7 @@ class Config:
     exemplar_stretch = False
     iou_pos_threshold = 0.6
     iou_neg_threshold = 0.3
-    train_batch_size = 16
+    train_batch_size = 32
     valid_batch_size = 8
     train_num_workers = 4
     valid_num_workers = 4
@@ -48,7 +48,7 @@ class Config:
     ohem_pos = False
     ohem_neg = False
     ohem_reg = False
-    lamb = 5
+    lamb = 1
     clip = 10
     show_interval = 3
     save_interval = 1

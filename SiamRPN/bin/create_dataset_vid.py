@@ -85,6 +85,6 @@ def process_all_sequence(vid_dir, output_dir, num_threads=mp.cpu_count()):
 
 
 if __name__ == '__main__':
-    vid_dir = '/media/csy/e1d382bb-e140-4c82-bbc6-8ee2f62a4240/dataset/ILSVRC2015_VID/ILSVRC2015/Data/VID'
-    output_dir = '/media/csy/e1d382bb-e140-4c82-bbc6-8ee2f62a4240/dataset/ILSVRC2015_VID_curation3'
+    vid_dir = '/home/csy/dataset/dataset/ILSVRC2015_VID/ILSVRC2015/Data/VID'
+    output_dir = '/home/csy/dataset/dataset/ILSVRC2015_VID_CURATION'
     process_all_sequence(vid_dir, output_dir, num_threads=mp.cpu_count())

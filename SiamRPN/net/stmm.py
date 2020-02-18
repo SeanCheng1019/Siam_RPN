@@ -33,10 +33,14 @@ class STMM(nn.Module):
 
     def forward(self, x, mem=None):
         N_, C, H, W = x.shape
-        N, T, M = int(N_ / Config.his_window), self.T, self.M
+        N, T, M = int(N_ / (Config.his_window + 1)), self.T, self.M
         feat_input = x.reshape(N, T, C, H, W)
-        if mem == None:
-            mem = Variable(t.zeros([N, M, H, W])).cuda()
+        if mem is None:
+            # mem = Variable(t.zeros([N, M, H, W])).cuda()
+            # mem 为空的时候，赋值为第一帧
+            mem = feat_input[:, 0, :, :, :].cuda()
+        else:
+            mem = mem.cuda()
         self.mem_input = []
         self.mem_output = []
         self.z_output = []
@@ -82,8 +86,8 @@ class STMM_cell(nn.Module):
         if Config.memAlign:
             mem0 = self.FeatureAlign(feat_input, prev_feat, prev_mem)
         else:
-            # 先随便设的参数
-            feat_input = 0.5 * feat_input + 0.5 * prev_feat
+
+            feat_input = feat_input + 0 * prev_feat
 
         #  (这里的relu是临时的，还需要改成和论文里一样的relu)
         z = self.AddLinearScale(t.relu(self.conv_z_w(feat_input) + self.conv_z_u(mem0)))

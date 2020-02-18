@@ -15,7 +15,7 @@ from collections import OrderedDict
 from lib.custom_transforms import RandomStretch, ToTensor
 from lib.dataset import GetDataSet
 from lib.loss import rpn_cross_entropy_banlance, rpn_smoothL1
-from lib.util import ajust_learning_rate, get_topK_box, add_box_img, compute_iou, box_transform_use_reg_offset
+from lib.util import ajust_learning_rate, get_topK_box, add_box_img, compute_iou, box_transform_use_reg_offset,crop_and_pad
 from net.net_siamrpn import SiameseAlexNet
 from lib.viusal import visual
 import pickle
@@ -144,6 +144,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
         # 为了训练时在终端打印实时loss设置的
         loss_temp_cls = 0
         loss_temp_reg = 0
+        loss_temp_template = 0
         for i, data in enumerate(tqdm(trainloader)):
             # 每次加载一个mini-batch数量的样本
             # exemplar_imgs size:[32,127,127,3]  regression_target size:[32,1805,4]
@@ -154,12 +155,18 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                 instance_his_imgs = instance_his_imgs.reshape(-1, Config.exemplar_size, Config.exemplar_size, 3)
                 # exemplar_imgs = np.concatenate(exemplar_imgs, axis=0)  # 合并第一第二维度，因为网络的输入规定四维
                 instance_his_imgs = t.from_numpy(instance_his_imgs)
-
+                pred_cls_score, pred_regression, template_loss = model(exemplar_imgs.cuda(),
+                                                        instance_imgs.cuda(),
+                                                        instance_his_imgs,
+                                                        training=True)
+            else:
+                pred_cls_score, pred_regression = model(exemplar_imgs.cuda(),
+                                                        instance_imgs.cuda(),
+                                                        instance_his_imgs,
+                                                        training=True)
             regression_target, cls_label_map = regression_target.cuda(), cls_label_map.cuda()
-            pred_cls_score, pred_regression = model(exemplar_imgs.cuda(),
-                                                    instance_imgs.cuda(),
-                                                    instance_his_imgs,
-                                                    training=True)
+
+
             pred_cls_score = pred_cls_score.reshape(-1, 2,
                                                     Config.anchor_num *
                                                     Config.train_map_size *
@@ -168,12 +175,17 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             pred_regression = pred_regression.reshape(-1, 4,
                                                       Config.anchor_num * Config.train_map_size *
                                                       Config.train_map_size).permute(0, 2, 1)
+
             cls_loss = rpn_cross_entropy_banlance(pred_cls_score, cls_label_map, Config.num_pos,
                                                   Config.num_neg, anchors,
                                                   ohem_pos=Config.ohem_pos, ohem_neg=Config.ohem_neg)
             reg_loss = rpn_smoothL1(pred_regression, regression_target, cls_label_map,
                                     Config.num_pos, ohem=Config.ohem_reg)
-            loss = cls_loss + Config.lamb * reg_loss
+            # 总的loss上加上模版loss
+            if Config.update_template:
+                loss = cls_loss + Config.lamb * reg_loss + template_loss
+            else:
+                loss = cls_loss + Config.lamb * reg_loss
             # 梯度清零
             optimizer.zero_grad()
             # 反向传播求梯度
@@ -184,20 +196,31 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             step = (epoch - 1) * len(trainloader) + i
             # summary_writer.add_scalar('train/cls_loss', cls_loss.data, step)
             # summary_writer.add_scalar('train/reg_loss', reg_loss.data, step)
-            summary_writer.add_scalars('train',
-                                       {'cls_loss': cls_loss.data.item(), 'reg_loss': reg_loss.data.item(),
-                                        'total_loss': loss.data.item()},
-                                       step)
+            if Config.update_template:
+                summary_writer.add_scalars('train',
+                                           {'cls_loss': cls_loss.data.item(), 'reg_loss': reg_loss.data.item(),
+                                            'template_loss': template_loss.data.item(),
+                                            'total_loss': loss.data.item()},
+                                           step)
+            else:
+                summary_writer.add_scalars('train',
+                                           {'cls_loss': cls_loss.data.item(), 'reg_loss': reg_loss.data.item(),
+                                            'total_loss': loss.data.item()},
+                                           step)
             # 加入总loss
             train_loss.append(loss.detach().cpu())
             loss_temp_cls += cls_loss.detach().cpu().numpy()
             loss_temp_reg += reg_loss.detach().cpu().numpy()
+            loss_temp_template += template_loss.detach().cpu().numpy()
             if (i + 1) % Config.show_interval == 0:
-                tqdm.write("[epoch %2d][iter %4d] cls_loss: %.4f, reg_loss: %.4f, lr: %.2e"
+                tqdm.write("[epoch %2d][iter %4d] cls_loss: %.4f, reg_loss: %.4f, temp_loss: %.4f, lr: %.2e"
                            % (epoch, i, loss_temp_cls / Config.show_interval,
-                              loss_temp_reg / Config.show_interval, optimizer.param_groups[0]['lr']))
+                              loss_temp_reg / Config.show_interval, loss_temp_template / Config.show_interval,
+                              optimizer.param_groups[0]['lr']))
                 loss_temp_cls = 0
                 loss_temp_reg = 0
+                loss_temp_template = 0
+
                 # 可视化
                 if vis_port:
                     anchors_show = train_dataset.anchors
@@ -263,10 +286,15 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
                 instance_his_imgs = instance_his_imgs.reshape(-1, Config.exemplar_size, Config.exemplar_size, 3)
                 # exemplar_imgs = np.concatenate(exemplar_imgs, axis=0)  # 合并第一第二维度，因为网络的输入规定四维
                 instance_his_imgs = t.from_numpy(instance_his_imgs)
+                pred_cls_score, pred_regression, template_loss = model(exemplar_imgs.cuda(),
+                                                                       instance_imgs.cuda(),
+                                                                       instance_his_imgs,
+                                                                       training=False)
+            else:
+                pred_cls_score, pred_regression = model(exemplar_imgs.cuda(),
+                                                        instance_imgs.cuda(),
+                                                        instance_his_imgs)
             regression_target, cls_label_map = regression_target.cuda(), cls_label_map.cuda()
-            pred_cls_score, pred_regression = model(exemplar_imgs.cuda(),
-                                                    instance_imgs.cuda(),
-                                                    instance_his_imgs)
             pred_cls_score = pred_cls_score.reshape(-1, 2,
                                                     Config.anchor_num *
                                                     Config.train_map_size *
@@ -274,20 +302,31 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             pred_regression = pred_regression.reshape(-1, 4,
                                                       Config.anchor_num * Config.train_map_size *
                                                       Config.train_map_size).permute(0, 2, 1)
+
             cls_loss = rpn_cross_entropy_banlance(pred_cls_score, cls_label_map, Config.num_pos,
                                                   Config.num_neg, anchors, ohem_pos=Config.ohem_pos,
                                                   ohem_neg=Config.ohem_neg)
             reg_loss = rpn_smoothL1(pred_regression, regression_target, cls_label_map,
                                     Config.num_pos, Config.ohem_reg)
-            loss = cls_loss + Config.lamb * reg_loss
+            if Config.update_template:
+                loss = cls_loss + Config.lamb * reg_loss + template_loss
+            else:
+                loss = cls_loss + Config.lamb * reg_loss
             valid_loss.append(loss.detach().cpu())
         valid_loss = np.mean(valid_loss)
-        print("[EPOCH %2d] valid_loss: %.4f, train_loss: %.4f" % (epoch, valid_loss, train_loss))
+        print("[EPOCH %2d] valid_loss: %.4f, train_loss: %.4f", (epoch, valid_loss, train_loss))
         # 这里验证集的add_scalar的step参数和之前训练时候的不同
-        summary_writer.add_scalars('valid', {'cls_loss': cls_loss.data.item(),
-                                             'reg_loss': reg_loss.data.item(),
-                                             'total_loss': loss.data.item()},
-                                   (epoch + 1) * len(trainloader))
+        if Config.update_template:
+            summary_writer.add_scalars('valid', {'cls_loss': cls_loss.data.item(),
+                                                 'reg_loss': reg_loss.data.item(),
+                                                 'template_loss': template_loss.data.item(),
+                                                 'total_loss': loss.data.item()},
+                                       (epoch + 1) * len(trainloader))
+        else:
+            summary_writer.add_scalars('valid', {'cls_loss': cls_loss.data.item(),
+                                                 'reg_loss': reg_loss.data.item(),
+                                                 'total_loss': loss.data.item()},
+                                       (epoch + 1) * len(trainloader))
         ajust_learning_rate(optimizer, Config.gamma)
         if epoch % 10 == 0:  # 每10个epoch看一下已经选择过的序列
             print(train_dataset.choosed_idx.sort())
@@ -313,7 +352,8 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
 
 
 if __name__ == '__main__':
-    data_dir = "/home/csy/dataset/dataset/ILSVRC2015_VID_curation2"
+    # data_dir = "/home/csy/dataset/dataset/ILSVRC2015_VID_curation2"
+    data_dir = "/home/csy/dataset/dataset/ILSVRC2015_VID_CURATION"
     model_path = None
     vis_port = 8097
     init = None

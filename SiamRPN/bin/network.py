@@ -4,10 +4,9 @@ import torch as t
 from net.config import Config
 import torch.nn.functional as F
 from net.config import Config
-from lib.util import crop_and_pad
 from net.vgg16 import VGG16
 from net.stmm import STMM
-from net.alexnet import AlexNet
+#from net.alexnet import AlexNet
 from lib.viusal import visual
 from lib.util import norm_to_255
 
@@ -39,10 +38,10 @@ class SiameseAlexNet(nn.Module):
             nn.BatchNorm2d(256),
         )
         if Config.update_template:
-            self.alexnet = self.sharedFeatExtra
-            self.channel_adjust = nn.Conv2d(256, 512, 1)
             # self.vgg16 = VGG16()
             # self.alexnet = AlexNet().cuda()
+            self.alexnet = self.sharedFeatExtra().cuda()
+            self.channel_adjust = nn.Conv2d(256, 512, 1)
             # load pretrained paramter to stmm module
             # pretrained_checkpoint = t.load(Config.pretrained_model)
             # pretrained_checkpoint = \
@@ -52,7 +51,7 @@ class SiameseAlexNet(nn.Module):
             # self.alexnet.load_state_dict(model_dict)
             # print("finish loading stmm_module's pre-trained model \n")
             # stmm module
-            self.stmm = STMM(8, Config.his_window + 1, 512, 512, 1)
+            self.stmm = STMM(8, Config.his_window + 1, 512, 512, 1) # 加了1帧GT
 
         self.anchor_num_per_position = Config.anchor_num
         self.input_size = Config.instance_size
@@ -64,7 +63,6 @@ class SiameseAlexNet(nn.Module):
                                         4 * self.anchor_num_per_position, 1)
         if Config.update_template:
             self.stmm_mem_adjust = nn.Conv2d(512, 256, 1)
-            self.mem = None
 
     def forward(self, template, detection, his_frame, training=False):
         """
@@ -76,31 +74,17 @@ class SiameseAlexNet(nn.Module):
         """
         N = template.size(0)
         if Config.update_template:
-            detection_ = detection.cpu().detach().numpy()
             template_wh = template.size(2)
-            detection2template = np.zeros(
-                (Config.stmm_train_batch_size, Config.exemplar_size, Config.exemplar_size, 3))
-            for i in range(0, detection_.shape[0]):
-                detection2template[i], _ = crop_and_pad(detection_[i], (detection_.shape[1] - 1) / 2,
-                                                        (detection_.shape[1] - 1) / 2,
-                                                        Config.exemplar_size,
-                                                        Config.exemplar_size)
-            detection2template = detection2template.astype('float32')
             if training:
                 templates = his_frame.view(Config.stmm_train_batch_size, Config.his_window, template_wh,
                                            template_wh, 3)
                 # detection = detection.view(Config.stmm_train_batch_size, 3, detection_wh, detection_wh)
 
             else:
-                # detection2template, _ = crop_and_pad(detection_, (detection_.shape[1] - 1) / 2,
-                #                                     (detection_.shape[1] - 1) / 2,
-                #                                     Config.exemplar_size,
-                #                                    Config.exemplar_size)
-                # detection2template = detection2template.astype('float32')
                 templates = his_frame.view(Config.stmm_valid_batch_size, Config.his_window, template_wh,
                                            template_wh, 3)
                 # detection = detection.view(Config.stmm_valid_batch_size, 3, detection_wh, detection_wh)
-            detection2template = t.from_numpy(detection2template).permute(0, 3, 1, 2).cuda()
+
             template_stmm = \
                 templates[:, 0:Config.his_window, :, :, :].permute(0, 1, 4, 2, 3).contiguous().view(-1,
                                                                                                     3,
@@ -108,8 +92,8 @@ class SiameseAlexNet(nn.Module):
                                                                                                     Config.exemplar_size
                                                                                                     ).float()
 
-        # template = template.view(-1, 3, Config.exemplar_size, Config.exemplar_size)
-        # detection = detection.view(-1, 3, Config.instance_size, Config.instance_size)
+            # template = template.view(-1, 3, Config.exemplar_size, Config.exemplar_size)
+            # detection = detection.view(-1, 3, Config.instance_size, Config.instance_size)
         template = template.permute(0, 3, 1, 2)
         detection = detection.permute(0, 3, 1, 2)
 
@@ -117,38 +101,32 @@ class SiameseAlexNet(nn.Module):
         detection_feature = self.sharedFeatExtra(detection)
         if Config.update_template:
             # his_template_feature = self.vgg16(template_stmm.cuda())  # shape:[N, 512, 6, 6]
-            his_template_feature = self.channel_adjust(
-                self.sharedFeatExtra(template_stmm.cuda()))  # shape:[40, 512, 6, 6]
-            first_template_feature = self.channel_adjust(self.sharedFeatExtra(template))
-            # 把第一帧GT也放入到stmm中去
-            mixed_feature = t.cat([first_template_feature, his_template_feature])  # [48, 512, 6, 6]
+            his_template_feature = self.alexnet(template_stmm.cuda())  # shape:[N, 512, 6, 6]
+            first_template_feature = self.alexnet(template)
+            mixed_feature = t.cat([first_template_feature, his_template_feature])  # GT加上历史帧裁剪的模板
             his_mem = self.stmm(mixed_feature)
             update_mem_feature = his_mem[:, -1, :, :, :]  # shape:[N, 512, 6, 6]
-            update_mem_feature = self.stmm_mem_adjust(update_mem_feature.cuda())  # [8, 256, 6, 6]
-            detection2tempate_feature = self.sharedFeatExtra(detection2template)  # [8, 256, 6, 6]
-            template_loss = F.mse_loss(update_mem_feature, detection2tempate_feature)
-            # 历史5帧融合成的新模板特征，和第一帧的模板特征线性加权 (太过粗糙)
+            update_mem_feature = self.stmm_mem_adjust(update_mem_feature.cuda())
+            # 历史5帧融合成的新模板特征，和第一帧的模板特征线性加权 （需要改进，线性加权） 同时这个要要加一个loss
             update_mem_feature = Config.template_combinition_coef * template_feature + (
                     1 - Config.template_combinition_coef) * update_mem_feature
             kernel_cls = self.conv_cls1(update_mem_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
             kernel_reg = self.conv_reg1(update_mem_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
         else:
-            kernel_cls = self.conv_cls1(template_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
-            kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
+            kernel_cls = self.conv_cls1(template_feature).view(N, 2 * self.anchor_num_per_position, 512, 4, 4)
+            kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 512, 4, 4)
         conv_cls = self.conv_cls2(detection_feature)
         conv_reg = self.conv_reg2(detection_feature)
         cls_map_size = list(conv_cls.shape)[-1]
         conv_cls = conv_cls.reshape(1, -1, cls_map_size, cls_map_size)  # 改变形状，才能进行两者卷积
-        kernel_cls = kernel_cls.reshape(-1, 256, 4, 4)
+        kernel_cls = kernel_cls.reshape(-1, 512, 4, 4)
         reg_map_size = list(conv_reg.shape)[-1]
         conv_reg = conv_reg.reshape(1, -1, reg_map_size, reg_map_size)
-        kernel_reg = kernel_reg.reshape(-1, 256, 4, 4)
+        kernel_reg = kernel_reg.reshape(-1, 512, 4, 4)
         pred_cls = F.conv2d(conv_cls, kernel_cls, groups=N)
         pred_reg = F.conv2d(conv_reg, kernel_reg, groups=N)
         pred_reg = self.regress_adjust(pred_reg.reshape(N, 4 * self.anchor_num_per_position,
                                                         Config.train_map_size, Config.train_map_size))
-        if Config.update_template:
-            return pred_cls, pred_reg, template_loss
         return pred_cls, pred_reg
 
     def track_init(self, template):
@@ -160,13 +138,10 @@ class SiameseAlexNet(nn.Module):
         template_feature = self.sharedFeatExtra(template)
         self.origin_template_feature = template_feature
         # self.first_template_feature = template_feature
-        kernel_cls = self.conv_cls1(template_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
-        kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
-        self.kernel_cls = kernel_cls.reshape(-1, 256, 4, 4)
-        self.kernel_reg = kernel_reg.reshape(-1, 256, 4, 4)
-        # 每个序列开始的时候，清空mem
-        if Config.update_template:
-            self.mem = None
+        kernel_cls = self.conv_cls1(template_feature).view(N, 2 * self.anchor_num_per_position, 512, 4, 4)
+        kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 512, 4, 4)
+        self.kernel_cls = kernel_cls.reshape(-1, 512, 4, 4)
+        self.kernel_reg = kernel_reg.reshape(-1, 512, 4, 4)
 
     def track_update_template(self, his_templates):
         """
@@ -183,15 +158,13 @@ class SiameseAlexNet(nn.Module):
                                                                                                  Config.exemplar_size,
                                                                                                  Config.exemplar_size
                                                                                                  ).float()
-        his_template_feature = self.channel_adjust(
-                self.sharedFeatExtra(template_stmm.cuda()))  # shape:[5, 512, 6, 6]
-        mixed_feature = t.cat([self.channel_adjust(self.origin_template_feature), his_template_feature])
-        # 这里的mem是保留同一个序列中，之前融合的结果作为mem，一直传递下去。
-        his_mem = self.stmm(mixed_feature, mem=self.mem)
+        his_template_feature = self.alexnet(template_stmm.cuda())  # shape:[5, 512, 6, 6]
+        self.first_template_feature = self.alexnet(self.template_img.cuda())
+        mixed_feature = t.cat([self.first_template_feature, his_template_feature])
+        his_mem = self.stmm(mixed_feature)
         update_mem_feature = his_mem[:, -1, :, :, :]  # shape:[N, 512, 6, 6]
-        self.mem = update_mem_feature
         update_mem_feature = self.stmm_mem_adjust(update_mem_feature.cuda())
-        # 历史5帧融合成的新模板特征，和第一帧的模板特征线性加权(待修改)
+        # 历史5帧融合成的新模板特征，和第一帧的模板特征线性加权
         new_template_feature = Config.template_combinition_coef * self.origin_template_feature + (
                 1 - Config.template_combinition_coef) * update_mem_feature
         self.kernel_cls = self.conv_cls1(new_template_feature).view(N, 2 * self.anchor_num_per_position, 256, 4,

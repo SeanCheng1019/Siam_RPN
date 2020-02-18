@@ -79,6 +79,7 @@ class GetDataSet(Dataset):
                 continue
             # 选到模版图片 (511,511)
             exemplar_img = self.imread(exemplar_whole_path_name)
+
             # 开始选instance_img 6张连续帧的index
             instance_indexes = choose_inst_img_through_exm_img(exemplar_index, trk_frames)
             if not isinstance(instance_indexes, list):
