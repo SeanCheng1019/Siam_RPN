@@ -32,11 +32,14 @@ class SiamRPNTracker(Tracker):
         self.transforms = transforms.Compose([
             ToTensor()
         ])
-        self.update = False
+        self.update_ = False
         self.frame_count = 0
         self.template_save_num_count = 0
         if Config.update_template:
             self.his_frame_pool = []
+        if Config.select_template:
+            assert Config.select_template == Config.update_template, \
+                "you must update template then you can select different template"
 
     def init(self, frame, bbox):
         """
@@ -106,21 +109,23 @@ class SiamRPNTracker(Tracker):
                 # print("更新模板\n")
                 # 隔五帧更新
                 if (self.frame_count - 1) % 5 == 0 and self.frame_count != 1:
-                    self.update = True
-                if self.update:
+                    self.update_ = True
+                else:
+                    self.update_ = False
+                if self.update_:
                     self.model.track_update_template(his_templates=self.his_frame_pool)
 
         instance_img, _, _, scale_detection = get_instance_img(frame, box, Config.exemplar_size,
                                                                self.instance_size, Config.context_margin_amount,
                                                                self.img_mean)
         instance_img = self.transforms(instance_img)[None, :, :, :]
-        if Config.update_template and Config.select_template and self.update:
-            pred_cls, pred_reg, pred_cls_ori, pred_reg_ori = self.model.tracking(detection=instance_img.permute(0, 3, 1, 2).cuda())
+        if Config.select_template and self.update_:  # need choose template
+            pred_cls, pred_reg, pred_cls_ori, pred_reg_ori = self.model.tracking(detection=instance_img.permute(0, 3, 1, 2).cuda(), update_=True)
             pred_reg_ori = pred_reg_ori.reshape(-1, 4,
                                         Config.anchor_num * self.valid_map_size * self.valid_map_size).permute(0,
                                                                                                                2,
                                                                                                                1)
-        else:
+        else:  # 1.update template but don't choose template 2. don't update template
             pred_cls, pred_reg = self.model.tracking(detection=instance_img.permute(0, 3, 1, 2).cuda())
         # pred_cls = pred_cls.reshape(-1, 2,
         #                             Config.anchor_num * Config.score_map_size * Config.score_map_size).permute(0,
@@ -135,7 +140,7 @@ class SiamRPNTracker(Tracker):
         pred_box = box_transform_use_reg_offset(self.anchors, delta).squeeze()
         pred_score = F.softmax(pred_cls.permute(
             1, 2, 3, 0).contiguous().view(2, -1), dim=0).data[1].cpu().numpy()
-        if Config.update_template and Config.select_template and self.update:
+        if Config.update_template and Config.select_template and self.update_:
             delta_ori = pred_reg_ori.cpu().detach().numpy().squeeze()
             pred_box_ori = box_transform_use_reg_offset(self.anchors, delta_ori).squeeze()
             pred_score_ori = F.softmax(pred_cls_ori.permute(
@@ -176,7 +181,7 @@ class SiamRPNTracker(Tracker):
                         Config.min_scale * self.origin_target_sz[1],
                         Config.max_scale * self.origin_target_sz[1])
         # update state
-        if not Config.select_template:
+        if (not Config.select_template) or (Config.select_template and not self.update_):
             self.center_pos = np.array([res_x, res_y])
             self.target_sz_w = res_w
             self.target_sz_h = res_h
@@ -189,7 +194,7 @@ class SiamRPNTracker(Tracker):
             np.clip(bbox[2], 10, frame.shape[1]).astype(np.float64),
             np.clip(bbox[3], 10, frame.shape[0]).astype(np.float64)
         ])
-        if Config.update_template and Config.select_template and self.update:
+        if Config.update_template and Config.select_template and self.update_:
             s_ori = max_ratio(overall_scale(pred_box_ori[:, 2], pred_box_ori[:, 3]) /
                           # 乘以scale_detection的原因：pred_box是放缩后的图上预测出的box，而target_sz_w、_h是原图的尺寸，两者要同步尺寸
                           (overall_scale(self.target_sz_w * scale_detection, self.target_sz_h * scale_detection)))
@@ -235,6 +240,9 @@ class SiamRPNTracker(Tracker):
                 self.target_sz_h = res_h
                 self.target_sz = np.array([res_w, res_h])
                 crop_box = bbox
+        else:
+            crop_box = box
+        # save history image
         if Config.update_template:
             croped_template, _, _ = get_exemplar_img(frame, crop_box, Config.exemplar_size,
                                                      Config.context_margin_amount,
@@ -248,7 +256,7 @@ class SiamRPNTracker(Tracker):
             croped_template = self.transforms(croped_template)[None, :, :, :]
             self.his_frame_pool.append(croped_template)
             self.frame_count += 1
-        if Config.update_template and Config.select_template and self.update:
+        if Config.update_template and Config.select_template and self.update_:
             return box_ori
         else:
             return box

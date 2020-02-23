@@ -128,12 +128,13 @@ class SiameseAlexNet(nn.Module):
             update_mem_feature = his_mem[:, -1, :, :, :]  # shape:[N, 512, 6, 6]
             update_mem_feature = self.stmm_mem_adjust(update_mem_feature.cuda())  # [8, 256, 6, 6]
             detection2tempate_feature = self.sharedFeatExtra(detection2template)  # [8, 256, 6, 6]
-            template_loss = F.mse_loss(update_mem_feature, detection2tempate_feature)
+            # template_loss = F.mse_loss(update_mem_feature, detection2tempate_feature)
             # 历史5帧融合成的新模板特征，和第一帧的模板特征线性加权 (太过粗糙)
             #update_mem_feature = Config.template_combinition_coef * template_feature + (
             #        1 - Config.temcplate_combinition_coef) * update_mem_feature
             # 这里和上面的loss的顺序是否换?
             update_mem_feature = self.combine(t.cat((template_feature, update_mem_feature), dim=1))
+            template_loss = F.mse_loss(update_mem_feature, detection2tempate_feature)
 
             kernel_cls = self.conv_cls1(update_mem_feature).view(N, 2 * self.anchor_num_per_position, 256, 4, 4)
             kernel_reg = self.conv_reg1(update_mem_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
@@ -169,8 +170,8 @@ class SiameseAlexNet(nn.Module):
         kernel_reg = self.conv_reg1(template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4, 4)
         self.kernel_cls = kernel_cls.reshape(-1, 256, 4, 4)
         self.kernel_reg = kernel_reg.reshape(-1, 256, 4, 4)
-        self.kernel_cls_ori = self.kernel_cls.copy()
-        self.kernel_reg_ori = self.kernel_reg.copy()
+        self.kernel_cls_ori = self.kernel_cls.clone()
+        self.kernel_reg_ori = self.kernel_reg.clone()
         # 每个序列开始的时候，清空mem
         if Config.update_template:
             self.mem = None
@@ -207,7 +208,7 @@ class SiameseAlexNet(nn.Module):
         self.kernel_reg = self.conv_reg1(new_template_feature).view(N, 4 * self.anchor_num_per_position, 256, 4,
                                                                     4).reshape(-1, 256, 4, 4)
 
-    def tracking(self, detection):
+    def tracking(self, detection, update_=False):
         N = detection.size(0)
         detection_feature = self.sharedFeatExtra(detection)
         conv_cls = self.conv_cls2(detection_feature)
@@ -221,7 +222,7 @@ class SiameseAlexNet(nn.Module):
         map_size = pred_reg.size()[-1]
         pred_reg = self.regress_adjust(pred_reg.reshape(N, 4 * self.anchor_num_per_position,
                                                         map_size, map_size))
-        if Config.update_template and Config.select_template:
+        if Config.update_template and Config.select_template and update_:
             pred_cls_ori = F.conv2d(conv_cls, self.kernel_cls_ori, groups=N)
             pred_reg_ori = F.conv2d(conv_reg, self.kernel_reg_ori, groups=N)
             map_size_ori = pred_reg_ori.size()[-1]

@@ -65,6 +65,6 @@ class Config:
     stmm_train_batch_size = 8
     stmm_valid_batch_size = 1
     update_template = True
-    select_template = True
+    select_template = False
     template_combinition_coef = 0.7
     std_multiplier = 3
