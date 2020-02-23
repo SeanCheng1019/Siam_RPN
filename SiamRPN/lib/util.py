@@ -303,19 +303,19 @@ def add_box_img(img, boxes, color=(0, 255, 0)):
 
 
 def use_others_model(model):
-    model_ = model['model']
-    model_ = {k.replace('featureExtract', 'sharedFeatExtra'): v for k, v in model_.items()}
-    model_ = {k.replace('conv_r1', 'conv_reg1'): v for k, v in model_.items()}
-    model_ = {k.replace('conv_r2', 'conv_reg2'): v for k, v in model_.items()}
-    model['model'] = model_
-    #model_ = model.copy()
-    #model_ = {k.replace('feature', 'sharedFeatExtra'): v for k, v in model_.items()}
-    #model_ = {k.replace('conv_reg_z', 'conv_reg1'): v for k, v in model_.items()}
-    #model_ = {k.replace('conv_reg_x', 'conv_reg2'): v for k, v in model_.items()}
-    #model_ = {k.replace('conv_cls_z', 'conv_cls1'): v for k, v in model_.items()}
-    #model_ = {k.replace('conv_cls_x', 'conv_cls2'): v for k, v in model_.items()}
-    #model_ = {k.replace('adjust_reg', 'regress_adjust'): v for k, v in model_.items()}
-    #model = model_
+    #model_ = model['model']
+    #model_ = {k.replace('featureExtract', 'sharedFeatExtra'): v for k, v in model_.items()}
+    #model_ = {k.replace('conv_r1', 'conv_reg1'): v for k, v in model_.items()}
+    #model_ = {k.replace('conv_r2', 'conv_reg2'): v for k, v in model_.items()}
+    #model['model'] = model_
+    model_ = model.copy()
+    model_ = {k.replace('feature', 'sharedFeatExtra'): v for k, v in model_.items()}
+    model_ = {k.replace('conv_reg_z', 'conv_reg1'): v for k, v in model_.items()}
+    model_ = {k.replace('conv_reg_x', 'conv_reg2'): v for k, v in model_.items()}
+    model_ = {k.replace('conv_cls_z', 'conv_cls1'): v for k, v in model_.items()}
+    model_ = {k.replace('conv_cls_x', 'conv_cls2'): v for k, v in model_.items()}
+    model_ = {k.replace('adjust_reg', 'regress_adjust'): v for k, v in model_.items()}
+    model = model_
     return model
 
 

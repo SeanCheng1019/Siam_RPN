@@ -33,7 +33,8 @@ class STMM(nn.Module):
 
     def forward(self, x, mem=None):
         N_, C, H, W = x.shape
-        N, T, M = int(N_ / (Config.his_window + 1)), self.T, self.M
+        #N, T, M = int(N_ / (Config.his_window + 1)), self.T, self.M
+        N, T, M = int(N_ / (Config.his_window)), self.T, self.M
         feat_input = x.reshape(N, T, C, H, W)
         if mem is None:
             # mem = Variable(t.zeros([N, M, H, W])).cuda()

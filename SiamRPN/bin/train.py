@@ -335,7 +335,7 @@ def train(data_dir, model_path=None, vis_port=None, init=None):
             if not os.path.exists('../data/models/'):
                 os.mkdir('../data/models/')
             if Config.update_template:
-                save_name = '../data/models/siamrpn_stmm_epoch_{}.pth'.format(epoch)
+                save_name = '../data/models/siamrpn_stmm_select_template_epoch_{}.pth'.format(epoch)
             else:
                 save_name = '../data/models/siamrpn_epoch_{}.pth'.format(epoch)
             if t.cuda.device_count() > 1:  # remove 'module.'

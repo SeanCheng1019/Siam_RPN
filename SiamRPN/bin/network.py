@@ -16,26 +16,26 @@ class SiameseAlexNet(nn.Module):
         super(SiameseAlexNet, self).__init__()
         self.sharedFeatExtra = nn.Sequential(
             # conv1
-            nn.Conv2d(3, 96, 11, stride=2),
-            nn.BatchNorm2d(96),
+            nn.Conv2d(3, 192, 11, stride=2),
+            nn.BatchNorm2d(192),
             nn.MaxPool2d(3, stride=2),
             nn.ReLU(inplace=True),
             # conv2
-            nn.Conv2d(96, 256, 5),
-            nn.BatchNorm2d(256),
+            nn.Conv2d(192, 512, 5),
+            nn.BatchNorm2d(512),
             nn.MaxPool2d(3, stride=2),
             nn.ReLU(inplace=True),
             # conv3
-            nn.Conv2d(256, 384, 3),
-            nn.BatchNorm2d(384),
+            nn.Conv2d(512, 768, 3),
+            nn.BatchNorm2d(768),
             nn.ReLU(inplace=True),
             # conv4
-            nn.Conv2d(384, 384, 3),
-            nn.BatchNorm2d(384),
+            nn.Conv2d(768, 768, 3),
+            nn.BatchNorm2d(768),
             nn.ReLU(inplace=True),
             # conv5
-            nn.Conv2d(384, 256, 3),
-            nn.BatchNorm2d(256),
+            nn.Conv2d(768, 512, 3),
+            nn.BatchNorm2d(512),
         )
         if Config.update_template:
             # self.vgg16 = VGG16()
@@ -55,10 +55,10 @@ class SiameseAlexNet(nn.Module):
 
         self.anchor_num_per_position = Config.anchor_num
         self.input_size = Config.instance_size
-        self.conv_cls1 = nn.Conv2d(256, 256 * 2 * self.anchor_num_per_position, 3)
-        self.conv_cls2 = nn.Conv2d(256, 256, 3)
-        self.conv_reg1 = nn.Conv2d(256, 256 * 4 * self.anchor_num_per_position, 3)
-        self.conv_reg2 = nn.Conv2d(256, 256, 3)
+        self.conv_cls1 = nn.Conv2d(512, 512 * 2 * self.anchor_num_per_position, 3)
+        self.conv_cls2 = nn.Conv2d(512, 512, 3)
+        self.conv_reg1 = nn.Conv2d(512, 512 * 4 * self.anchor_num_per_position, 3)
+        self.conv_reg2 = nn.Conv2d(512, 512, 3)
         self.regress_adjust = nn.Conv2d(4 * self.anchor_num_per_position,
                                         4 * self.anchor_num_per_position, 1)
         if Config.update_template:
